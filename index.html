@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>诗词接龙游戏</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <!-- Left control panel -->
+        <div id="left-panel" class="panel">
+            <h1>诗词接龙</h1>
+            <div class="status-label" id="status-label">选择连接点</div>
+            <div class="stats">
+                <div>回合: <span id="turn-count">1</span></div>
+                <div>诗句: <span id="poem-count">1</span></div>
+            </div>
+        </div>
+
+        <!-- Canvas container -->
+        <div id="canvas-container">
+            <canvas id="game-canvas"></canvas>
+        </div>
+
+        <!-- Bottom draft operation bar -->
+        <div id="draft-bar" class="draft-bar hidden">
+            <button id="cancel-btn" class="btn">取消</button>
+            <input type="text" id="poem-input" placeholder="输入诗句..." maxlength="20">
+            <button id="confirm-btn" class="btn primary" disabled>确认</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

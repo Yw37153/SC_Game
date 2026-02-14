@@ -1,0 +1,143 @@
+/* 基础样式 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Noto Serif SC", "SimSun", serif;
+  overflow: hidden;
+  width: 100vw;
+  height: 100vh;
+  background: white;
+}
+
+#game-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* 左上角控制面板 */
+.panel {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 15px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  z-index: 100;
+  min-width: 200px;
+}
+
+.panel h1 {
+  font-size: 20px;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.status-label {
+  background: #f0f0f0;
+  padding: 5px 10px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: #666;
+}
+
+.stats {
+  font-size: 14px;
+  color: #666;
+}
+
+.stats div {
+  margin: 5px 0;
+}
+
+/* 画布容器 */
+#canvas-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+#game-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  cursor: default;
+}
+
+/* 底部草稿操作栏 */
+.draft-bar {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 15px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  z-index: 100;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.draft-bar.hidden {
+  display: none;
+}
+
+#poem-input {
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: "Noto Serif SC", "SimSun", serif;
+  width: 200px;
+}
+
+/* 按钮样式 */
+.btn {
+  padding: 8px 16px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: "Noto Serif SC", "SimSun", serif;
+  transition: all 0.2s;
+}
+
+.btn:hover {
+  background: #f0f0f0;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn.primary {
+  background: #4CAF50;
+  color: white;
+  border-color: #4CAF50;
+}
+
+.btn.primary:hover:not(:disabled) {
+  background: #45a049;
+}
+
+.btn.primary:disabled {
+  background: #cccccc;
+  border-color: #cccccc;
+}
