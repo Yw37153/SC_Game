@@ -9,6 +9,8 @@ const gameState = {
   draftMode: false,
   draft: null,
   hoveredCell: null,
+  highlightedCells: [], // 高亮的可填空格子
+  selectedSource: null, // 选中的源字 {x, y, char}
   canvas: {
     scale: 1,
     offsetX: 0,
@@ -982,6 +984,11 @@ function drawCanvas() {
   // 绘制网格
   drawGrid(ctx);
 
+  // 绘制高亮格子（在诗句下层）
+  if (gameState.highlightedCells.length > 0) {
+    drawHighlightedCells(ctx);
+  }
+
   // 绘制诗句
   drawPoems(ctx);
 
@@ -994,6 +1001,52 @@ function drawCanvas() {
   if (gameState.hoveredCell && !gameState.draftMode) {
     drawDirectionSelector(ctx);
   }
+}
+
+// 绘制高亮格子
+function drawHighlightedCells(ctx) {
+  const centerX = gameCanvas.width / 2 + gameState.canvas.offsetX;
+  const centerY = gameCanvas.height / 2 + gameState.canvas.offsetY;
+  const scale = gameCanvas.scale;
+  
+  const baseSize = CELL_SIZE * scale;
+  const highlightSize = baseSize * 1.15; // 放大15%
+  const offset = (highlightSize - baseSize) / 2;
+  
+  gameState.highlightedCells.forEach(cell => {
+    const pixelX = centerX + cell.x * CELL_SIZE * scale - offset;
+    const pixelY = centerY + cell.y * CELL_SIZE * scale - offset;
+    
+    // 判断是否是源字
+    const isSource = gameState.selectedSource && 
+                     gameState.selectedSource.x === cell.x && 
+                     gameState.selectedSource.y === cell.y;
+    
+    if (isSource) {
+      // 源字：更大 + 深蓝色边框
+      const sourceSize = baseSize * 1.3; // 放大30%
+      const sourceOffset = (sourceSize - baseSize) / 2;
+      const sourceX = centerX + cell.x * CELL_SIZE * scale - sourceOffset;
+      const sourceY = centerY + cell.y * CELL_SIZE * scale - sourceOffset;
+      
+      // 背景：浅蓝色
+      ctx.fillStyle = 'rgba(100, 149, 237, 0.25)';
+      ctx.fillRect(sourceX, sourceY, sourceSize, sourceSize);
+      
+      // 边框：深蓝色加粗
+      ctx.strokeStyle = '#4169E1';
+      ctx.lineWidth = 4 * scale;
+      ctx.strokeRect(sourceX, sourceY, sourceSize, sourceSize);
+    } else {
+      // 普通高亮格子：浅灰蓝色 + 加粗边框
+      ctx.fillStyle = 'rgba(176, 196, 222, 0.2)';
+      ctx.fillRect(pixelX, pixelY, highlightSize, highlightSize);
+      
+      ctx.strokeStyle = '#778899';
+      ctx.lineWidth = 3 * scale;
+      ctx.strokeRect(pixelX, pixelY, highlightSize, highlightSize);
+    }
+  });
 }
 
 // 绘制网格
@@ -1040,16 +1093,38 @@ function drawPoems(ctx) {
       const pixelX = centerX + x * CELL_SIZE * scale;
       const pixelY = centerY + y * CELL_SIZE * scale;
 
-      // 绘制单元格背景
-      ctx.fillStyle = 'white';
-      ctx.strokeStyle = '#ccc';
-      ctx.lineWidth = 1;
-      ctx.fillRect(pixelX, pixelY, CELL_SIZE * scale, CELL_SIZE * scale);
-      ctx.strokeRect(pixelX, pixelY, CELL_SIZE * scale, CELL_SIZE * scale);
+      // 判断是否是源字
+      const isSource = gameState.selectedSource && 
+                       gameState.selectedSource.x === x && 
+                       gameState.selectedSource.y === y;
 
-      // 绘制文字
-      ctx.fillStyle = '#333';
-      ctx.font = `${24 * scale}px "Noto Serif SC", "SimSun", serif`;
+      if (isSource) {
+        // 源字：更大的背景 + 深色边框
+        const sourceSize = CELL_SIZE * scale * 1.3;
+        const offset = (sourceSize - CELL_SIZE * scale) / 2;
+        
+        ctx.fillStyle = 'rgba(100, 149, 237, 0.15)';
+        ctx.fillRect(pixelX - offset, pixelY - offset, sourceSize, sourceSize);
+        
+        ctx.strokeStyle = '#4169E1';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(pixelX - offset, pixelY - offset, sourceSize, sourceSize);
+        
+        // 源字：更大的字体
+        ctx.fillStyle = '#1a1a1a';
+        ctx.font = `${32 * scale}px "Noto Serif SC", "SimSun", serif`;
+      } else {
+        // 普通字：正常绘制
+        ctx.fillStyle = 'white';
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.fillRect(pixelX, pixelY, CELL_SIZE * scale, CELL_SIZE * scale);
+        ctx.strokeRect(pixelX, pixelY, CELL_SIZE * scale, CELL_SIZE * scale);
+        
+        ctx.fillStyle = '#333';
+        ctx.font = `${24 * scale}px "Noto Serif SC", "SimSun", serif`;
+      }
+      
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(poem.text[i], pixelX + CELL_SIZE * scale / 2, pixelY + CELL_SIZE * scale / 2);
