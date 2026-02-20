@@ -1,5 +1,6 @@
 // 诗词接龙游戏 - MVP版本
 
+<<<<<<< Updated upstream
 // 游戏状态
 const gameState = {
   poems: [], // { text, x, y, direction, turn }
@@ -31,6 +32,789 @@ const INITIAL_POEM = {
 };
 
 // DOM元素
+=======
+// 触摸UI系统
+const TouchUI = {
+  isEnabled: false,
+  virtualButtons: [],
+  isVisible: true,
+  opacity: 0.7,
+  scale: 1.0,
+
+  init() {
+    this.isEnabled = InputManager.getTouchDeviceStatus();
+    if (this.isEnabled) {
+      this.createDefaultButtons();
+      this.updateButtonPositions();
+    }
+  },
+
+  createDefaultButtons() {
+    // 创建默认虚拟按钮
+    this.virtualButtons = [
+      {
+        id: 'move_up',
+        action: 'move_up',
+        label: '↑',
+        x: 0,
+        y: 0,
+        width: 60,
+        height: 60,
+        visible: true
+      },
+      {
+        id: 'move_down',
+        action: 'move_down',
+        label: '↓',
+        x: 0,
+        y: 0,
+        width: 60,
+        height: 60,
+        visible: true
+      },
+      {
+        id: 'move_left',
+        action: 'move_left',
+        label: '←',
+        x: 0,
+        y: 0,
+        width: 60,
+        height: 60,
+        visible: true
+      },
+      {
+        id: 'move_right',
+        action: 'move_right',
+        label: '→',
+        x: 0,
+        y: 0,
+        width: 60,
+        height: 60,
+        visible: true
+      },
+      {
+        id: 'action_1',
+        action: 'action_1',
+        label: 'A1',
+        x: 0,
+        y: 0,
+        width: 80,
+        height: 80,
+        visible: true
+      },
+      {
+        id: 'action_2',
+        action: 'action_2',
+        label: 'A2',
+        x: 0,
+        y: 0,
+        width: 80,
+        height: 80,
+        visible: true
+      }
+    ];
+  },
+
+  updateButtonPositions() {
+    if (!this.isEnabled) return;
+
+    const canvas = gameCanvas;
+    const margin = 20;
+    const buttonSize = 60;
+
+    // 左侧方向控制
+    const leftX = margin;
+    const centerY = canvas.height / 2;
+
+    const moveButtons = this.virtualButtons.filter(b => b.id.startsWith('move_'));
+    moveButtons[0].x = leftX; // up
+    moveButtons[0].y = centerY - buttonSize - 10;
+
+    moveButtons[1].x = leftX; // down
+    moveButtons[1].y = centerY + 10;
+
+    moveButtons[2].x = leftX - buttonSize - 10; // left
+    moveButtons[2].y = centerY;
+
+    moveButtons[3].x = leftX + buttonSize + 10; // right
+    moveButtons[3].y = centerY;
+
+    // 右侧动作按钮
+    const rightX = canvas.width - margin - buttonSize;
+    const actionButtons = this.virtualButtons.filter(b => b.id.startsWith('action_'));
+
+    actionButtons[0].x = rightX - buttonSize - 10; // action_1
+    actionButtons[0].y = centerY - buttonSize / 2;
+
+    actionButtons[1].x = rightX; // action_2
+    actionButtons[1].y = centerY - buttonSize / 2;
+  },
+
+  getVirtualButtons() {
+    return this.virtualButtons.filter(button => button.visible);
+  },
+
+  draw(ctx) {
+    if (!this.isEnabled || !this.isVisible) return;
+
+    this.virtualButtons.forEach(button => {
+      if (!button.visible) return;
+
+      // 保存当前状态
+      ctx.save();
+
+      // 设置透明度
+      ctx.globalAlpha = this.opacity;
+
+      // 绘制按钮背景
+      ctx.fillStyle = 'rgba(100, 100, 100, 0.8)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.lineWidth = 2;
+
+      const x = button.x * this.scale;
+      const y = button.y * this.scale;
+      const width = button.width * this.scale;
+      const height = button.height * this.scale;
+
+      // 圆角矩形
+      this.roundRect(ctx, x, y, width, height, 8);
+      ctx.fill();
+      ctx.stroke();
+
+      // 绘制按钮文字
+      ctx.fillStyle = 'white';
+      ctx.font = `${Math.floor(16 * this.scale)}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(button.label, x + width / 2, y + height / 2);
+
+      // 恢复状态
+      ctx.restore();
+    });
+  },
+
+  roundRect(ctx, x, y, width, height, radius) {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+  },
+
+  setOpacity(opacity) {
+    this.opacity = Math.max(0.1, Math.min(1.0, opacity));
+  },
+
+  setScale(scale) {
+    this.scale = Math.max(0.5, Math.min(2.0, scale));
+    this.updateButtonPositions();
+  },
+
+  show() {
+    this.isVisible = true;
+  },
+
+  hide() {
+    this.isVisible = false;
+  },
+
+  toggle() {
+    this.isVisible = !this.isVisible;
+  },
+
+  highlightButton(buttonId, highlight) {
+    // 简单的按钮高亮功能 - 可以在这里添加视觉效果
+    if (highlight) {
+      this.highlightedButton = buttonId;
+    } else {
+      this.highlightedButton = null;
+    }
+    // 立即重绘以显示高亮效果
+    drawCanvas();
+  },
+
+  getHighlightedButton() {
+    return this.highlightedButton;
+  }
+};
+
+// 输入管理系统
+const InputManager = {
+  providers: new Map(),
+  eventQueue: [],
+  isTouchDevice: false,
+
+  init() {
+    this.detectTouchDevice();
+    this.registerProvider('mouse', new MouseInputProvider());
+    this.registerProvider('keyboard', new KeyboardInputProvider());
+    if (this.isTouchDevice) {
+      this.registerProvider('touch', new TouchInputProvider());
+    }
+  },
+
+  detectTouchDevice() {
+    this.isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  },
+
+  registerProvider(name, provider) {
+    this.providers.set(name, provider);
+    provider.init(this);
+    provider.enable(); // 启用输入提供者（修复）
+  },
+
+  queueEvent(event) {
+    this.eventQueue.push({
+      ...event,
+      timestamp: performance.now()
+    });
+
+    // 保持队列长度合理，移除超过100ms的旧事件
+    const now = performance.now();
+    this.eventQueue = this.eventQueue.filter(e => now - e.timestamp < 100);
+  },
+
+  processEvents() {
+    const events = [...this.eventQueue];
+    this.eventQueue = [];
+
+    // 按优先级排序处理事件
+    events.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+
+    for (const event of events) {
+      this.handleEvent(event);
+    }
+  },
+
+  handleEvent(event) {
+    switch (event.type) {
+      case 'click':
+        handleCanvasClick(event.data);
+        break;
+      case 'move':
+        handleMouseMove(event.data);
+        break;
+      case 'drag':
+        handleMouseDown(event.data);
+        break;
+      case 'dragMove':
+        handleMouseMoveForDrag(event.data);
+        break;
+      case 'dragEnd':
+        handleMouseUp(event.data);
+        break;
+      case 'zoom':
+        handleWheelZoom(event.data);
+        break;
+      case 'keyDown':
+        handleKeyDown(event.data);
+        break;
+      case 'touchClick':
+        this.handleTouchClick(event.data);
+        break;
+      case 'touchStart':
+        this.handleTouchStart(event.data);
+        break;
+      case 'touchMove':
+        this.handleTouchMove(event.data);
+        break;
+      case 'touchEnd':
+        this.handleTouchEnd(event.data);
+        break;
+      case 'gesture':
+        this.handleGesture(event.data);
+        break;
+    }
+  },
+
+  handleTouchClick(data) {
+    // 检查是否点击了虚拟按钮
+    if (data.zone && data.zone.action === 'virtualButton') {
+      this.handleVirtualButtonPress(data.zone.buttonAction);
+      return;
+    }
+
+    // 否则处理为普通画布点击
+    const simulatedEvent = {
+      clientX: data.clientX,
+      clientY: data.clientY,
+      target: gameCanvas
+    };
+    handleCanvasClick(simulatedEvent);
+  },
+
+  handleTouchStart(data) {
+    // 触摸开始处理
+    if (data.zone && data.zone.action === 'virtualButton') {
+      TouchUI.highlightButton(data.zone.buttonId, true);
+    }
+  },
+
+  handleTouchMove(data) {
+    // 触摸移动处理 - 可以添加拖拽逻辑
+  },
+
+  handleTouchEnd(data) {
+    // 触摸结束处理
+    TouchUI.highlightButton(null, false);
+  },
+
+  handleGesture(data) {
+    // 手势处理
+    switch (data.type) {
+      case 'pinch':
+        this.handlePinchGesture(data);
+        break;
+    }
+  },
+
+  handlePinchGesture(data) {
+    // 处理缩放手势
+    const scaleFactor = data.scale;
+    const simulatedWheelEvent = {
+      clientX: data.centerX,
+      clientY: data.centerY,
+      deltaY: scaleFactor > 1 ? -100 : 100,
+      preventDefault: () => {},
+      target: gameCanvas
+    };
+    handleWheelZoom(simulatedWheelEvent);
+  },
+
+  handleVirtualButtonPress(action) {
+    // 处理虚拟按钮按压
+    switch (action) {
+      case 'move_up':
+        this.simulateKeyPress('ArrowUp');
+        break;
+      case 'move_down':
+        this.simulateKeyPress('ArrowDown');
+        break;
+      case 'move_left':
+        this.simulateKeyPress('ArrowLeft');
+        break;
+      case 'move_right':
+        this.simulateKeyPress('ArrowRight');
+        break;
+      case 'action_1':
+        this.simulateKeyPress('Space');
+        break;
+      case 'action_2':
+        this.simulateKeyPress('Enter');
+        break;
+    }
+  },
+
+  simulateKeyPress(key) {
+    const simulatedKeyEvent = {
+      key: key,
+      preventDefault: () => {},
+      target: document
+    };
+    handleKeyDown(simulatedKeyEvent);
+  },
+
+  getTouchDeviceStatus() {
+    return this.isTouchDevice;
+  }
+};
+
+// 输入提供者基类
+class InputProvider {
+  constructor(name) {
+    this.name = name;
+    this.inputManager = null;
+    this.isActive = false;
+  }
+
+  init(inputManager) {
+    this.inputManager = inputManager;
+  }
+
+  enable() {
+    this.isActive = true;
+  }
+
+  disable() {
+    this.isActive = false;
+  }
+
+  emit(event) {
+    if (this.isActive && this.inputManager) {
+      this.inputManager.queueEvent(event);
+    }
+  }
+}
+
+// 鼠标输入提供者
+class MouseInputProvider extends InputProvider {
+  constructor() {
+    super('mouse');
+    this.isDragging = false;
+  }
+
+  init(inputManager) {
+    super.init(inputManager);
+    this.setupEventListeners();
+  }
+
+  setupEventListeners() {
+    gameCanvas.addEventListener('click', (e) => this.handleClick(e));
+    gameCanvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+    gameCanvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+    gameCanvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
+    gameCanvas.addEventListener('mouseleave', (e) => this.handleMouseUp(e));
+    gameCanvas.addEventListener('wheel', (e) => this.handleWheel(e));
+  }
+
+  handleClick(e) {
+    this.emit({
+      type: 'click',
+      data: e,
+      priority: 10
+    });
+  }
+
+  handleMouseMove(e) {
+    // 使用全局 isDragging 变量（修复作用域问题）
+    this.emit({
+      type: isDragging ? 'dragMove' : 'move',
+      data: e,
+      priority: isDragging ? 8 : 5
+    });
+  }
+
+  handleMouseDown(e) {
+    // 使用全局 isDragging，但不立即设置为 true（由 handleMouseDown 全局函数处理）
+    this.emit({
+      type: 'drag',
+      data: e,
+      priority: 9
+    });
+  }
+
+  handleMouseUp(e) {
+    // 使用全局 isDragging
+    if (isDragging) {
+      this.emit({
+        type: 'dragEnd',
+        data: e,
+        priority: 9
+      });
+    }
+  }
+
+  handleWheel(e) {
+    this.emit({
+      type: 'zoom',
+      data: e,
+      priority: 7
+    });
+  }
+}
+
+// 键盘输入提供者
+class KeyboardInputProvider extends InputProvider {
+  constructor() {
+    super('keyboard');
+  }
+
+  init(inputManager) {
+    super.init(inputManager);
+    this.setupEventListeners();
+  }
+
+  setupEventListeners() {
+    document.addEventListener('keydown', (e) => this.handleKeyDown(e));
+  }
+
+  handleKeyDown(e) {
+    this.emit({
+      type: 'keyDown',
+      data: e,
+      priority: 6
+    });
+  }
+}
+
+// 触摸输入提供者
+class TouchInputProvider extends InputProvider {
+  constructor() {
+    super('touch');
+    this.activeTouches = new Map();
+    this.gestureRecognizer = new GestureRecognizer();
+    this.touchZones = new Map();
+  }
+
+  init(inputManager) {
+    super.init(inputManager);
+    this.setupEventListeners();
+    this.setupDefaultTouchZones();
+  }
+
+  setupEventListeners() {
+    gameCanvas.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
+    gameCanvas.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
+    gameCanvas.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
+    gameCanvas.addEventListener('touchcancel', (e) => this.handleTouchCancel(e), { passive: false });
+  }
+
+  setupDefaultTouchZones() {
+    this.updateTouchZones();
+  }
+
+  updateTouchZones() {
+    // 清除现有区域
+    this.touchZones.clear();
+
+    // 添加全屏画布区域
+    this.touchZones.set('canvas', {
+      x: 0,
+      y: 0,
+      width: gameCanvas.width,
+      height: gameCanvas.height,
+      action: 'canvas'
+    });
+
+    // 如果触摸UI启用，添加虚拟按钮区域
+    if (TouchUI.isEnabled) {
+      this.addVirtualButtonZones();
+    }
+  }
+
+  addVirtualButtonZones() {
+    const buttons = TouchUI.getVirtualButtons();
+
+    buttons.forEach((button, index) => {
+      const buttonZone = {
+        x: button.x,
+        y: button.y,
+        width: button.width,
+        height: button.height,
+        action: 'virtualButton',
+        buttonId: button.id,
+        buttonAction: button.action
+      };
+
+      this.touchZones.set(`button_${button.id}`, buttonZone);
+    });
+  }
+
+  handleTouchStart(e) {
+    e.preventDefault();
+
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const touch = e.changedTouches[i];
+      const touchData = {
+        identifier: touch.identifier,
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        startX: touch.clientX,
+        startY: touch.clientY,
+        startTime: performance.now()
+      };
+
+      this.activeTouches.set(touch.identifier, touchData);
+
+      // 检查触摸区域
+      const zone = this.getTouchZone(touch.clientX, touch.clientY);
+
+      this.emit({
+        type: 'touchStart',
+        data: {
+          ...touchData,
+          zone: zone,
+          originalEvent: e
+        },
+        priority: 10
+      });
+    }
+
+    // 处理手势识别
+    if (this.activeTouches.size >= 2) {
+      this.gestureRecognizer.startGesture(this.activeTouches);
+    }
+  }
+
+  handleTouchMove(e) {
+    e.preventDefault();
+
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const touch = e.changedTouches[i];
+      const touchData = this.activeTouches.get(touch.identifier);
+
+      if (touchData) {
+        touchData.clientX = touch.clientX;
+        touchData.clientY = touch.clientY;
+        touchData.lastMoveTime = performance.now();
+
+        this.emit({
+          type: 'touchMove',
+          data: {
+            ...touchData,
+            originalEvent: e
+          },
+          priority: 8
+        });
+      }
+    }
+
+    // 处理手势识别
+    if (this.activeTouches.size >= 2) {
+      const gesture = this.gestureRecognizer.updateGesture(this.activeTouches);
+      if (gesture) {
+        this.emit({
+          type: 'gesture',
+          data: gesture,
+          priority: 9
+        });
+      }
+    }
+  }
+
+  handleTouchEnd(e) {
+    e.preventDefault();
+
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const touch = e.changedTouches[i];
+      const touchData = this.activeTouches.get(touch.identifier);
+
+      if (touchData) {
+        const duration = performance.now() - touchData.startTime;
+        const distance = Math.sqrt(
+          Math.pow(touch.clientX - touchData.startX, 2) +
+          Math.pow(touch.clientY - touchData.startY, 2)
+        );
+
+        // 判断是点击还是拖拽
+        const isClick = distance < 10 && duration < 200;
+
+        this.emit({
+          type: isClick ? 'touchClick' : 'touchEnd',
+          data: {
+            ...touchData,
+            endX: touch.clientX,
+            endY: touch.clientY,
+            duration: duration,
+            distance: distance,
+            originalEvent: e
+          },
+          priority: isClick ? 10 : 7
+        });
+
+        this.activeTouches.delete(touch.identifier);
+      }
+    }
+
+    this.gestureRecognizer.endGesture();
+  }
+
+  handleTouchCancel(e) {
+    e.preventDefault();
+
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const touch = e.changedTouches[i];
+      const touchData = this.activeTouches.get(touch.identifier);
+
+      if (touchData) {
+        this.emit({
+          type: 'touchCancel',
+          data: {
+            ...touchData,
+            originalEvent: e
+          },
+          priority: 6
+        });
+
+        this.activeTouches.delete(touch.identifier);
+      }
+    }
+
+    this.gestureRecognizer.endGesture();
+  }
+
+  getTouchZone(x, y) {
+    for (const [name, zone] of this.touchZones) {
+      if (x >= zone.x && x <= zone.x + zone.width &&
+          y >= zone.y && y <= zone.y + zone.height) {
+        return { name, ...zone };
+      }
+    }
+    return null;
+  }
+
+  addTouchZone(name, zone) {
+    this.touchZones.set(name, zone);
+  }
+
+  removeTouchZone(name) {
+    this.touchZones.delete(name);
+  }
+}
+
+// 手势识别器
+class GestureRecognizer {
+  constructor() {
+    this.active = false;
+    this.startTime = 0;
+    this.gestureType = null;
+  }
+
+  startGesture(touches) {
+    this.active = true;
+    this.startTime = performance.now();
+    this.gestureType = null;
+  }
+
+  updateGesture(touches) {
+    if (!this.active || touches.size < 2) return null;
+
+    const touchArray = Array.from(touches.values());
+
+    // 简单的缩放手势检测
+    if (touches.size === 2) {
+      const touch1 = touchArray[0];
+      const touch2 = touchArray[1];
+
+      const currentDistance = Math.sqrt(
+        Math.pow(touch2.clientX - touch1.clientX, 2) +
+        Math.pow(touch2.clientY - touch1.clientY, 2)
+      );
+
+      const startDistance = Math.sqrt(
+        Math.pow(touch2.startX - touch1.startX, 2) +
+        Math.pow(touch2.startY - touch1.startY, 2)
+      );
+
+      const scale = currentDistance / startDistance;
+
+      if (Math.abs(scale - 1) > 0.1) {
+        return {
+          type: 'pinch',
+          scale: scale,
+          centerX: (touch1.clientX + touch2.clientX) / 2,
+          centerY: (touch1.clientY + touch2.clientY) / 2
+        };
+      }
+    }
+
+    return null;
+  }
+
+  endGesture() {
+    this.active = false;
+    this.gestureType = null;
+  }
+}
+
+// DOM 元素引用
+>>>>>>> Stashed changes
 const gameCanvas = document.getElementById('game-canvas');
 const leftPanel = document.getElementById('left-panel');
 const statusLabel = document.getElementById('status-label');
@@ -40,6 +824,96 @@ const draftBar = document.getElementById('draft-bar');
 const poemInput = document.getElementById('poem-input');
 const cancelBtn = document.getElementById('cancel-btn');
 const confirmBtn = document.getElementById('confirm-btn');
+
+// Overlay 元素
+const startGameOverlay = document.getElementById('start-game-overlay');
+const inputOriginOverlay = document.getElementById('input-origin-overlay');
+const initialPoemInput = document.getElementById('initial-poem-input');
+const initError = document.getElementById('init-error');
+
+// 游戏状态
+const gameState = {
+  poems: [],
+  cells: new Map(),
+  currentTurn: 1,
+  draftMode: false,
+  draft: null,
+  hoveredCell: null,
+  selectedSource: null,
+  highlightedCells: [],
+  canvas: {
+    scale: 1,
+    offsetX: 0,
+    offsetY: 0
+  }
+};
+
+// 拖拽状态
+let isDragging = false;
+let lastMouseX = 0;
+let lastMouseY = 0;
+
+// 常量
+const CELL_SIZE = 60;
+
+// 显示开始界面
+function showStartOverlay() {
+  startGameOverlay.classList.remove('hidden');
+  inputOriginOverlay.classList.add('hidden');
+}
+
+// 初始诗句配置
+const INITIAL_POEM = {
+  text: "春江潮水连海平",
+  x: 0,
+  y: 0,
+  direction: "H",
+  turn: 1
+};
+
+// 显示输入初始诗句界面
+function showInputOverlay() {
+  startGameOverlay.classList.add('hidden');
+  inputOriginOverlay.classList.remove('hidden');
+  if (initialPoemInput) {
+    initialPoemInput.value = '';
+    initialPoemInput.focus();
+  }
+}
+
+// 开始游戏（输入初始诗句后）
+function startGameWithInitialPoem() {
+  const text = initialPoemInput.value.trim();
+  if (!text || text.length === 0) {
+    showInitError('请输入起始诗句');
+    return;
+  }
+  
+  // 隐藏 overlay
+  inputOriginOverlay.classList.add('hidden');
+  
+  // 设置初始诗句
+  INITIAL_POEM.text = text;
+  
+  // 初始化游戏
+  initGame();
+}
+
+// 显示初始输入错误
+function showInitError(message) {
+  if (initError) {
+    initError.textContent = message;
+    initError.classList.remove('hidden');
+  }
+}
+
+// 隐藏初始输入错误
+function hideInitError() {
+  if (initError) {
+    initError.textContent = '';
+    initError.classList.add('hidden');
+  }
+}
 
 // 初始化游戏
 function initGame() {
@@ -63,10 +937,20 @@ function initCanvas() {
   window.addEventListener('resize', resizeCanvas);
 }
 
+function startGame() {
+  const overlay = document.getElementById('start-game-overlay');
+  overlay.classList.add('hidden');
+}
+
 function resizeCanvas() {
   gameCanvas.width = window.innerWidth;
   gameCanvas.height = window.innerHeight;
   drawCanvas();
+}
+
+//开始界面
+function startOverlay() {
+  
 }
 
 // 添加首句
@@ -641,4 +1525,42 @@ function resetView() {
 }
 
 // 初始化游戏
-window.addEventListener('DOMContentLoaded', initGame);
+// 页面加载完成后设置事件监听
+window.addEventListener('DOMContentLoaded', () => {
+  // 开始界面点击事件
+  if (startGameOverlay) {
+    startGameOverlay.addEventListener('click', () => {
+      showInputOverlay();
+    });
+  }
+  
+  // 初始诗句输入框事件
+  if (initialPoemInput) {
+    initialPoemInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        startGameWithInitialPoem();
+      } else {
+        hideInitError();
+      }
+    });
+  }
+  
+  // 草稿栏按钮事件
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', exitDraftMode);
+  }
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', confirmDraft);
+  }
+  if (directionBtn) {
+    directionBtn.addEventListener('click', toggleDraftDirection);
+  }
+  
+  // 输入框事件
+  if (poemInput) {
+    poemInput.addEventListener('input', handleInputChange);
+  }
+  
+  // 显示开始界面
+  showStartOverlay();
+});

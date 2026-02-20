@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="game-container">
+    <div id="game-container" class="hidden">
         <!-- Left control panel -->
         <div id="left-panel" class="panel">
             <h1>诗词接龙</h1>
@@ -28,6 +28,23 @@
             <button id="cancel-btn" class="btn">取消</button>
             <input type="text" id="poem-input" placeholder="输入诗句..." maxlength="20">
             <button id="confirm-btn" class="btn primary" disabled>确认</button>
+        </div>
+    </div>
+
+    <div id="start-game-overlay" class="overlay">
+        <div class="overlay-content">
+            <h2>欢迎来到诗词地图！</h2>
+            <h3>点击任意位置开始游戏</h3>
+        </div>
+    </div>
+
+    <div id="input-origin-overlay" class="overlay">
+        <div class="overlay-content">
+            <h2>从哪开始？</h2>
+            <div id="initInput">
+                <input type="text" id="initial-poem-input" placeholder="输入起始诗句..." maxlength="20">
+                <div id="init-error" class="draft-error hidden"></div>
+            </div>
         </div>
     </div>
 
