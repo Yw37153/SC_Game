@@ -1,5 +1,38 @@
 // 诗词接龙游戏 - MVP版本
 
+// 常量定义
+const CELL_SIZE = 50;
+
+// 默认起始诗句
+const INITIAL_POEM = {
+  text: "春眠不觉晓",
+  x: 0,
+  y: 0,
+  direction: "H"
+};
+
+// 游戏状态
+const gameState = {
+  poems: [],
+  cells: new Map(),
+  currentTurn: 1,
+  canvas: {
+    offsetX: 0,
+    offsetY: 0,
+    scale: 1
+  },
+  hoveredCell: null,
+  selectedSource: null,
+  highlightedCells: [],
+  draftMode: false,
+  draft: null
+};
+
+// 拖拽状态
+let isDragging = false;
+let lastMouseX = 0;
+let lastMouseY = 0;
+
 // 触摸UI系统
 const TouchUI = {
   isEnabled: false,
@@ -1481,13 +1514,123 @@ function resetView() {
   drawCanvas();
 }
 
+// ========== 欢迎界面相关函数 ==========
+
+// 显示开始界面
+function showStartOverlay() {
+  const overlay = document.getElementById('start-game-overlay');
+  const inputOverlay = document.getElementById('input-origin-overlay');
+  const gameContainer = document.getElementById('game-container');
+  
+  if (overlay) overlay.classList.remove('hidden');
+  if (inputOverlay) inputOverlay.classList.add('hidden');
+  if (gameContainer) gameContainer.classList.add('hidden');
+}
+
+// 显示输入起始诗句界面
+function showInputOverlay() {
+  const overlay = document.getElementById('start-game-overlay');
+  const inputOverlay = document.getElementById('input-origin-overlay');
+  
+  if (overlay) overlay.classList.add('hidden');
+  if (inputOverlay) {
+    inputOverlay.classList.remove('hidden');
+    // 聚焦到输入框
+    setTimeout(() => {
+      const input = document.getElementById('initial-poem-input');
+      if (input) {
+        input.value = '';
+        input.focus();
+      }
+    }, 100);
+  }
+  hideInitError();
+}
+
+// 隐藏错误提示
+function hideInitError() {
+  const errorDiv = document.getElementById('init-error');
+  const input = document.getElementById('initial-poem-input');
+  
+  if (errorDiv) errorDiv.classList.add('hidden');
+  if (input) input.classList.remove('error');
+}
+
+// 显示错误提示
+function showInitError(message) {
+  const errorDiv = document.getElementById('init-error');
+  const input = document.getElementById('initial-poem-input');
+  
+  if (errorDiv) {
+    errorDiv.textContent = message;
+    errorDiv.classList.remove('hidden');
+  }
+  if (input) input.classList.add('error');
+}
+
+// 使用输入的诗句开始游戏
+function startGameWithInitialPoem() {
+  const input = document.getElementById('initial-poem-input');
+  const poemText = input ? input.value.trim() : '';
+  
+  // 验证输入
+  if (!poemText) {
+    showInitError('请输入起始诗句');
+    return;
+  }
+  
+  if (poemText.length < 2) {
+    showInitError('诗句至少需要2个字');
+    return;
+  }
+  
+  // 设置起始诗句
+  INITIAL_POEM.text = poemText;
+  INITIAL_POEM.x = 0;
+  INITIAL_POEM.y = 0;
+  INITIAL_POEM.direction = "H";
+  
+  // 隐藏输入界面
+  const inputOverlay = document.getElementById('input-origin-overlay');
+  if (inputOverlay) inputOverlay.classList.add('hidden');
+  
+  // 显示游戏界面
+  const gameContainer = document.getElementById('game-container');
+  if (gameContainer) gameContainer.classList.remove('hidden');
+  
+  // 初始化游戏
+  initGame();
+}
+
+// 返回到开始界面
+function backToStartOverlay() {
+  showStartOverlay();
+}
+
 // 初始化游戏
 // 页面加载完成后设置事件监听
 window.addEventListener('DOMContentLoaded', () => {
-  // 开始界面点击事件
-  if (startGameOverlay) {
-    startGameOverlay.addEventListener('click', () => {
+  // 开始界面 - 点击任意处继续
+  const startOverlay = document.getElementById('start-game-overlay');
+  if (startOverlay) {
+    startOverlay.addEventListener('click', () => {
       showInputOverlay();
+    });
+  }
+  
+  // 返回按钮
+  const backBtn = document.getElementById('back-btn');
+  if (backBtn) {
+    backBtn.addEventListener('click', () => {
+      backToStartOverlay();
+    });
+  }
+  
+  // 开始游戏按钮
+  const beginGameBtn = document.getElementById('begin-game-btn');
+  if (beginGameBtn) {
+    beginGameBtn.addEventListener('click', () => {
+      startGameWithInitialPoem();
     });
   }
   
@@ -1500,6 +1643,10 @@ window.addEventListener('DOMContentLoaded', () => {
         hideInitError();
       }
     });
+    
+    initialPoemInput.addEventListener('input', () => {
+      hideInitError();
+    });
   }
   
   // 草稿栏按钮事件
@@ -1508,9 +1655,6 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   if (confirmBtn) {
     confirmBtn.addEventListener('click', confirmDraft);
-  }
-  if (directionBtn) {
-    directionBtn.addEventListener('click', toggleDraftDirection);
   }
   
   // 输入框事件

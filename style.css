@@ -182,24 +182,126 @@ body {
   font-weight: normal;
 }
 
-#initInput {
+/* 游戏标题样式 */
+.game-title {
+  font-size: 48px;
+  color: #333;
+  margin-bottom: 10px;
+  letter-spacing: 8px;
+}
+
+.game-subtitle {
+  font-size: 16px;
+  color: #888;
+  margin-bottom: 40px;
+}
+
+.start-btn {
+  padding: 15px 50px;
+  font-size: 20px;
+  border-radius: 30px;
+  margin-top: 20px;
+}
+
+.click-hint {
+  font-size: 14px;
+  color: #aaa;
   margin-top: 30px;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* 输入界面样式 - 简约白色风格 */
+.input-hint {
+  font-size: 14px;
+  color: #999;
+  margin-bottom: 30px;
+  font-weight: 300;
+}
+
+.input-actions {
+  margin-top: 40px;
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+}
+
+/* 简约按钮样式 */
+.input-actions .btn {
+  padding: 12px 32px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: white;
+  color: #666;
+  font-size: 14px;
+  font-family: "Noto Serif SC", "SimSun", serif;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.input-actions .btn:hover {
+  border-color: #999;
+  color: #333;
+  background: #fafafa;
+}
+
+.input-actions .btn.primary {
+  border-color: #333;
+  background: #333;
+  color: white;
+}
+
+.input-actions .btn.primary:hover {
+  background: #555;
+  border-color: #555;
+}
+
+.error-message {
+  color: #c44;
+  font-size: 13px;
+  margin-top: 12px;
+  min-height: 20px;
+  font-weight: 400;
+}
+
+.error-message.hidden {
+  display: none;
+}
+
+#initInput {
+  margin: 0 auto;
+  max-width: 320px;
 }
 
 #initial-poem-input {
-  padding: 12px 16px;
-  border: 2px solid #ccc;
-  border-radius: 8px;
-  font-size: 18px;
+  padding: 16px 20px;
+  border: none;
+  border-bottom: 1px solid #ddd;
+  border-radius: 0;
+  font-size: 20px;
   font-family: "Noto Serif SC", "SimSun", serif;
   width: 100%;
-  max-width: 300px;
   text-align: center;
+  background: transparent;
+  transition: border-color 0.3s ease;
 }
 
 #initial-poem-input:focus {
   outline: none;
-  border-color: #667eea;
+  border-bottom-color: #333;
+}
+
+#initial-poem-input::placeholder {
+  color: #bbb;
+  font-size: 16px;
+}
+
+#initial-poem-input.error {
+  border-bottom-color: #c44;
 }
 
 
