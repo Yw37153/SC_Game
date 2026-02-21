@@ -25,7 +25,11 @@ const gameState = {
   selectedSource: null,
   highlightedCells: [],
   draftMode: false,
-  draft: null
+  draft: null,
+  // New input mode state
+  inputMode: false,
+  selectedCell: null,
+  directionSelector: null
 };
 
 // 拖拽状态
@@ -912,9 +916,19 @@ function drawCanvas() {
     drawDraftPreview(ctx);
   }
 
-  // 绘制方向选择器
-  if (gameState.hoveredCell && !gameState.draftMode) {
-    drawDirectionSelector(ctx);
+  // 绘制方向选择器（当选择了字但未进入输入模式时）
+  if (gameState.selectedCell && !gameState.draftMode) {
+    drawDirectionSelector(ctx, gameState.selectedCell);
+  }
+
+  // 绘制输入方格（在输入模式时）
+  if (gameState.inputMode && gameState.draft) {
+    drawInputCells(ctx);
+  }
+
+  // 更新浮动输入框位置
+  if (floatingInput) {
+    updateFloatingInputPosition();
   }
 }
 
@@ -1110,8 +1124,7 @@ function drawDraftPreview(ctx) {
 }
 
 // 绘制方向选择器
-function drawDirectionSelector(ctx) {
-  const cell = gameState.hoveredCell;
+function drawDirectionSelector(ctx, cell) {
   if (!cell) return;
 
   const centerX = gameCanvas.width / 2 + gameState.canvas.offsetX;
@@ -1153,6 +1166,86 @@ function drawDirectionSelector(ctx) {
   });
 }
 
+// 绘制输入方格
+function drawInputCells(ctx) {
+  const draft = gameState.draft;
+  if (!draft || !draft.inputCells) return;
+
+  const centerX = gameCanvas.width / 2 + gameState.canvas.offsetX;
+  const centerY = gameCanvas.height / 2 + gameState.canvas.offsetY;
+  const scale = gameState.canvas.scale;
+  const cellSize = CELL_SIZE * scale;
+
+  draft.inputCells.forEach((cell, index) => {
+    const pixelX = centerX + cell.x * cellSize;
+    const pixelY = centerY + cell.y * cellSize;
+
+    // Check if this cell overlaps with existing cell
+    const key = `${cell.x},${cell.y}`;
+    const existingCell = gameState.cells.get(key);
+
+    // Determine cell style based on state
+    let bgColor = '#fff9c4'; // Light yellow for empty input cell
+    let borderColor = '#ffeb3b'; // Yellow dashed border
+    let borderStyle = 'dashed';
+
+    if (existingCell) {
+      if (cell.char && existingCell.char === cell.char) {
+        // Valid overlap
+        bgColor = '#c8e6c9'; // Light green
+        borderColor = '#4CAF50'; // Green
+        borderStyle = 'solid';
+      } else if (cell.char) {
+        // Conflict
+        bgColor = '#ffcdd2'; // Light red
+        borderColor = '#f44336'; // Red
+        borderStyle = 'solid';
+      }
+    }
+
+    // Current active cell
+    if (index === draft.currentInputIndex) {
+      borderColor = '#4CAF50'; // Green border for active cell
+      borderStyle = 'solid';
+      // Add shadow effect
+      ctx.shadowColor = 'rgba(76, 175, 80, 0.5)';
+      ctx.shadowBlur = 10 * scale;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+    }
+
+    // Draw cell background
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(pixelX, pixelY, cellSize, cellSize);
+
+    // Reset shadow
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+
+    // Draw border
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = index === draft.currentInputIndex ? 3 : 2;
+
+    if (borderStyle === 'dashed') {
+      ctx.setLineDash([5 * scale, 5 * scale]);
+    } else {
+      ctx.setLineDash([]);
+    }
+
+    ctx.strokeRect(pixelX, pixelY, cellSize, cellSize);
+    ctx.setLineDash([]);
+
+    // Draw character if exists
+    if (cell.char) {
+      ctx.fillStyle = '#333';
+      ctx.font = `${24 * scale}px "Noto Serif SC", "SimSun", serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(cell.char, pixelX + cellSize / 2, pixelY + cellSize / 2);
+    }
+  });
+}
+
 // 设置事件监听
 function setupEventListeners() {
   // 画布点击事件
@@ -1183,49 +1276,111 @@ function setupEventListeners() {
 
 // 处理画布点击
 function handleCanvasClick(e) {
+  // Get canvas bounding rect and calculate exact position
   const rect = gameCanvas.getBoundingClientRect();
-  const clickX = e.clientX - rect.left;
-  const clickY = e.clientY - rect.top;
+  const scaleX = gameCanvas.width / rect.width;
+  const scaleY = gameCanvas.height / rect.height;
+  const clickX = (e.clientX - rect.left) * scaleX;
+  const clickY = (e.clientY - rect.top) * scaleY;
 
   if (gameState.draftMode) {
     // 草稿模式下不处理点击
     return;
   }
 
-  if (gameState.hoveredCell) {
-    // 检查是否点击了方向选择器箭头（使用像素坐标进行精确检测）
-    const directions = [
-      { dx: 0, dy: -1, dir: 'V' },
-      { dx: 0, dy: 1, dir: 'V' },
-      { dx: -1, dy: 0, dir: 'H' },
-      { dx: 1, dy: 0, dir: 'H' }
-    ];
+  // 如果已经选中了字，检查是否点击了方向箭头
+  if (gameState.selectedCell) {
+    const direction = checkDirectionArrowClick(clickX, clickY);
+    if (direction) {
+      // 选择了方向，进入输入模式
+      enterInputMode(gameState.selectedCell.x, gameState.selectedCell.y, gameState.selectedCell.char, direction);
+      return;
+    }
+    // 点击其他地方，取消选择
+    gameState.selectedCell = null;
+    gameState.directionSelector = null;
+    drawCanvas();
+    return;
+  }
 
-    const centerX = gameCanvas.width / 2 + gameState.canvas.offsetX;
-    const centerY = gameCanvas.height / 2 + gameState.canvas.offsetY;
-    const scale = gameState.canvas.scale;
-    const cellSize = CELL_SIZE * scale;
-    const arrowRadius = 15 * scale;
+  // 检查是否点击了字
+  const gridPos = pixelToGrid(clickX, clickY);
+  const key = `${gridPos.x},${gridPos.y}`;
+  const cell = gameState.cells.get(key);
 
-    for (const dir of directions) {
-      // 计算箭头在画布上的像素位置
-      const arrowPixelX = centerX + gameState.hoveredCell.x * cellSize + cellSize / 2 + dir.dx * cellSize;
-      const arrowPixelY = centerY + gameState.hoveredCell.y * cellSize + cellSize / 2 + dir.dy * cellSize;
+  if (cell) {
+    // 点击了字，显示方向选择器
+    gameState.selectedCell = {
+      x: gridPos.x,
+      y: gridPos.y,
+      char: cell.char
+    };
+    drawCanvas();
+  }
+}
 
-      // 计算点击位置与箭头中心的距离
-      const distance = Math.sqrt(
-        Math.pow(clickX - arrowPixelX, 2) +
-        Math.pow(clickY - arrowPixelY, 2)
-      );
+// 检查是否点击了方向箭头
+function checkDirectionArrowClick(clickX, clickY) {
+  if (!gameState.selectedCell) return null;
 
-      // 如果点击在箭头圆形区域内
-      if (distance <= arrowRadius) {
-        console.log('Arrow clicked:', dir.dir, 'at distance:', distance.toFixed(2));
-        enterDraftMode(gameState.hoveredCell.x, gameState.hoveredCell.y, gameState.hoveredCell.char, dir.dir);
-        return;
-      }
+  const directions = [
+    { dx: 0, dy: -1, dir: 'V', symbol: '↑' },
+    { dx: 0, dy: 1, dir: 'V', symbol: '↓' },
+    { dx: -1, dy: 0, dir: 'H', symbol: '←' },
+    { dx: 1, dy: 0, dir: 'H', symbol: '→' }
+  ];
+
+  const centerX = gameCanvas.width / 2 + gameState.canvas.offsetX;
+  const centerY = gameCanvas.height / 2 + gameState.canvas.offsetY;
+  const scale = gameState.canvas.scale;
+  const cellSize = CELL_SIZE * scale;
+  const arrowRadius = 20 * scale; // Larger hit area for easier clicking
+
+  for (const dir of directions) {
+    const arrowPixelX = centerX + gameState.selectedCell.x * cellSize + cellSize / 2 + dir.dx * cellSize;
+    const arrowPixelY = centerY + gameState.selectedCell.y * cellSize + cellSize / 2 + dir.dy * cellSize;
+
+    const distance = Math.sqrt(
+      Math.pow(clickX - arrowPixelX, 2) +
+      Math.pow(clickY - arrowPixelY, 2)
+    );
+
+    if (distance <= arrowRadius) {
+      return dir.dir;
     }
   }
+
+  return null;
+}
+
+// 进入输入模式
+function enterInputMode(anchorX, anchorY, anchorChar, direction) {
+  gameState.inputMode = true;
+  gameState.selectedCell = null;
+  gameState.draftMode = true;
+  gameState.draft = {
+    anchorX,
+    anchorY,
+    anchorChar,
+    direction,
+    text: '',
+    offset: 0,
+    inputCells: [], // Will be populated with cell positions
+    currentInputIndex: 0
+  };
+
+  // Calculate input cell positions
+  calculateInputCellPositions();
+
+  // Show the draft bar with confirm button
+  statusLabel.textContent = '在方格中输入诗句';
+  draftBar.classList.remove('hidden');
+  confirmBtn.disabled = true;
+
+  // Create and position the floating input
+  createFloatingInput();
+
+  drawCanvas();
 }
 
 // 处理鼠标移动
@@ -1238,9 +1393,12 @@ function handleMouseMove(e) {
     return;
   }
 
+  // Get canvas bounding rect and calculate exact position
   const rect = gameCanvas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
+  const scaleX = gameCanvas.width / rect.width;
+  const scaleY = gameCanvas.height / rect.height;
+  const x = (e.clientX - rect.left) * scaleX;
+  const y = (e.clientY - rect.top) * scaleY;
 
   const gridPos = pixelToGrid(x, y);
   const key = `${gridPos.x},${gridPos.y}`;
@@ -1267,8 +1425,8 @@ function pixelToGrid(pixelX, pixelY) {
   const centerY = gameCanvas.height / 2 + gameState.canvas.offsetY;
   const scale = gameState.canvas.scale;
 
-  const gridX = Math.round((pixelX - centerX) / (CELL_SIZE * scale));
-  const gridY = Math.round((pixelY - centerY) / (CELL_SIZE * scale));
+  const gridX = Math.floor((pixelX - centerX) / (CELL_SIZE * scale));
+  const gridY = Math.floor((pixelY - centerY) / (CELL_SIZE * scale));
 
   return { x: gridX, y: gridY };
 }
@@ -1282,7 +1440,9 @@ function enterDraftMode(anchorX, anchorY, anchorChar, direction) {
     anchorChar,
     direction,
     text: '',
-    offset: 0
+    offset: 0,
+    inputCells: [], // Array of {x, y, char} for input cells
+    currentInputIndex: 0 // Index of currently active input cell
   };
 
   statusLabel.textContent = '编辑诗句';
@@ -1294,10 +1454,200 @@ function enterDraftMode(anchorX, anchorY, anchorChar, direction) {
   drawCanvas();
 }
 
+// 计算输入方格位置
+function calculateInputCellPositions() {
+  const draft = gameState.draft;
+  if (!draft) return;
+
+  const maxCells = 10; // Maximum number of input cells
+  draft.inputCells = [];
+
+  for (let i = 0; i < maxCells; i++) {
+    let x = draft.anchorX;
+    let y = draft.anchorY;
+
+    if (draft.direction === 'H') {
+      x = draft.anchorX + i + 1; // Start from right of anchor
+    } else {
+      y = draft.anchorY + i + 1; // Start from below anchor
+    }
+
+    draft.inputCells.push({
+      x: x,
+      y: y,
+      char: '',
+      index: i
+    });
+  }
+}
+
+// 创建浮动输入框
+let floatingInput = null;
+
+function createFloatingInput() {
+  // Remove existing floating input if any
+  removeFloatingInput();
+
+  // Create new input element
+  floatingInput = document.createElement('input');
+  floatingInput.type = 'text';
+  floatingInput.className = 'floating-cell-input';
+  floatingInput.style.cssText = `
+    position: absolute;
+    width: ${CELL_SIZE}px;
+    height: ${CELL_SIZE}px;
+    border: 2px solid #4CAF50;
+    background: rgba(255, 255, 255, 0.95);
+    text-align: center;
+    font-size: 24px;
+    font-family: "Noto Serif SC", "SimSun", serif;
+    padding: 0;
+    margin: 0;
+    outline: none;
+    z-index: 1000;
+    pointer-events: auto;
+  `;
+
+  // Add event listeners
+  floatingInput.addEventListener('input', handleFloatingInput);
+  floatingInput.addEventListener('keydown', handleFloatingInputKeyDown);
+  floatingInput.addEventListener('compositionstart', () => {
+    gameState.isComposing = true;
+  });
+  floatingInput.addEventListener('compositionend', (e) => {
+    gameState.isComposing = false;
+    handleFloatingInput(e);
+  });
+
+  document.body.appendChild(floatingInput);
+  updateFloatingInputPosition();
+  floatingInput.focus();
+}
+
+// 移除浮动输入框
+function removeFloatingInput() {
+  if (floatingInput) {
+    floatingInput.remove();
+    floatingInput = null;
+  }
+}
+
+// 更新浮动输入框位置
+function updateFloatingInputPosition() {
+  if (!floatingInput || !gameState.draft || !gameState.draft.inputCells.length) return;
+
+  const draft = gameState.draft;
+  const currentCell = draft.inputCells[draft.currentInputIndex];
+
+  const centerX = gameCanvas.width / 2 + gameState.canvas.offsetX;
+  const centerY = gameCanvas.height / 2 + gameState.canvas.offsetY;
+  const scale = gameState.canvas.scale;
+
+  const pixelX = centerX + currentCell.x * CELL_SIZE * scale;
+  const pixelY = centerY + currentCell.y * CELL_SIZE * scale;
+
+  const rect = gameCanvas.getBoundingClientRect();
+
+  floatingInput.style.left = `${rect.left + pixelX}px`;
+  floatingInput.style.top = `${rect.top + pixelY}px`;
+  floatingInput.style.width = `${CELL_SIZE * scale}px`;
+  floatingInput.style.height = `${CELL_SIZE * scale}px`;
+  floatingInput.style.fontSize = `${24 * scale}px`;
+
+  // Set current value
+  floatingInput.value = currentCell.char || '';
+}
+
+// 处理浮动输入框输入
+function handleFloatingInput(e) {
+  if (gameState.isComposing) return;
+
+  const draft = gameState.draft;
+  if (!draft) return;
+
+  const value = e.target.value;
+  const currentCell = draft.inputCells[draft.currentInputIndex];
+
+  // Extract the last character (in case of Chinese input)
+  const char = value.slice(-1);
+
+  if (char) {
+    currentCell.char = char;
+
+    // Update draft text from all cells
+    updateDraftTextFromCells();
+
+    // Move to next cell if not at end
+    if (draft.currentInputIndex < draft.inputCells.length - 1) {
+      draft.currentInputIndex++;
+      updateFloatingInputPosition();
+    }
+
+    // Validate and redraw
+    validateDraft();
+    drawCanvas();
+  }
+}
+
+// 处理浮动输入框键盘事件
+function handleFloatingInputKeyDown(e) {
+  const draft = gameState.draft;
+  if (!draft) return;
+
+  switch (e.key) {
+    case 'ArrowLeft':
+      e.preventDefault();
+      if (draft.currentInputIndex > 0) {
+        draft.currentInputIndex--;
+        updateFloatingInputPosition();
+        drawCanvas();
+      }
+      break;
+    case 'ArrowRight':
+      e.preventDefault();
+      if (draft.currentInputIndex < draft.inputCells.length - 1) {
+        draft.currentInputIndex++;
+        updateFloatingInputPosition();
+        drawCanvas();
+      }
+      break;
+    case 'Backspace':
+      e.preventDefault();
+      const currentCell = draft.inputCells[draft.currentInputIndex];
+      if (currentCell.char) {
+        currentCell.char = '';
+      } else if (draft.currentInputIndex > 0) {
+        draft.currentInputIndex--;
+        draft.inputCells[draft.currentInputIndex].char = '';
+      }
+      updateDraftTextFromCells();
+      updateFloatingInputPosition();
+      validateDraft();
+      drawCanvas();
+      break;
+    case 'Escape':
+      exitDraftMode();
+      break;
+  }
+}
+
+// 从方格更新草稿文本
+function updateDraftTextFromCells() {
+  const draft = gameState.draft;
+  if (!draft) return;
+
+  draft.text = draft.inputCells.map(cell => cell.char).join('').trimEnd();
+}
+
 // 退出草稿模式
 function exitDraftMode() {
   gameState.draftMode = false;
+  gameState.inputMode = false;
   gameState.draft = null;
+  gameState.selectedCell = null;
+  gameState.directionSelector = null;
+
+  removeFloatingInput();
 
   statusLabel.textContent = '选择连接点';
   draftBar.classList.add('hidden');
@@ -1369,12 +1719,29 @@ function confirmDraft() {
   const draft = gameState.draft;
 
   // 计算起始位置
-  let startX = draft.anchorX - draft.offset;
+  // 对于新输入模式：从锚点旁边开始
+  // 对于旧输入框模式：使用 offset
+  let startX = draft.anchorX;
   let startY = draft.anchorY;
 
-  if (draft.direction === "V") {
-    startX = draft.anchorX;
-    startY = draft.anchorY - draft.offset;
+  if (gameState.inputMode) {
+    // 新输入模式：从锚点旁边开始
+    if (draft.direction === "H") {
+      startX = draft.anchorX + 1; // 从右侧开始
+      startY = draft.anchorY;
+    } else {
+      startX = draft.anchorX;
+      startY = draft.anchorY + 1; // 从下方开始
+    }
+  } else {
+    // 旧输入框模式
+    startX = draft.anchorX - draft.offset;
+    startY = draft.anchorY;
+
+    if (draft.direction === "V") {
+      startX = draft.anchorX;
+      startY = draft.anchorY - draft.offset;
+    }
   }
 
   // 创建新诗句
@@ -1476,9 +1843,12 @@ function handleWheelZoom(e) {
 
   e.preventDefault();
 
+  // Get canvas bounding rect and calculate exact position
   const rect = gameCanvas.getBoundingClientRect();
-  const mouseX = e.clientX - rect.left;
-  const mouseY = e.clientY - rect.top;
+  const scaleX = gameCanvas.width / rect.width;
+  const scaleY = gameCanvas.height / rect.height;
+  const mouseX = (e.clientX - rect.left) * scaleX;
+  const mouseY = (e.clientY - rect.top) * scaleY;
 
   // 计算缩放因子
   const delta = e.deltaY > 0 ? 0.9 : 1.1;

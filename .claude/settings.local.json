@@ -4,7 +4,9 @@
       "Bash(git init:*)",
       "Bash(npm init -y)",
       "Bash(test -f:*)",
-      "Bash(gh pr list:*)"
+      "Bash(gh pr list:*)",
+      "Bash(openspec status:*)",
+      "Bash(openspec instructions:*)"
     ]
   }
 }
