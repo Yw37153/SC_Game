@@ -1,6 +1,7 @@
 // 诗词接龙游戏 - MVP版本
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 // 游戏状态
 const gameState = {
   poems: [], // { text, x, y, direction, turn }
@@ -35,6 +36,8 @@ const INITIAL_POEM = {
 
 // DOM元素
 =======
+=======
+>>>>>>> Stashed changes
 // 触摸UI系统
 const TouchUI = {
   isEnabled: false,
@@ -816,6 +819,9 @@ class GestureRecognizer {
 }
 
 // DOM 元素引用
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 const gameCanvas = document.getElementById('game-canvas');
 const leftPanel = document.getElementById('left-panel');
@@ -826,6 +832,96 @@ const draftBar = document.getElementById('draft-bar');
 const poemInput = document.getElementById('poem-input');
 const cancelBtn = document.getElementById('cancel-btn');
 const confirmBtn = document.getElementById('confirm-btn');
+
+// Overlay 元素
+const startGameOverlay = document.getElementById('start-game-overlay');
+const inputOriginOverlay = document.getElementById('input-origin-overlay');
+const initialPoemInput = document.getElementById('initial-poem-input');
+const initError = document.getElementById('init-error');
+
+// 游戏状态
+const gameState = {
+  poems: [],
+  cells: new Map(),
+  currentTurn: 1,
+  draftMode: false,
+  draft: null,
+  hoveredCell: null,
+  selectedSource: null,
+  highlightedCells: [],
+  canvas: {
+    scale: 1,
+    offsetX: 0,
+    offsetY: 0
+  }
+};
+
+// 拖拽状态
+let isDragging = false;
+let lastMouseX = 0;
+let lastMouseY = 0;
+
+// 常量
+const CELL_SIZE = 60;
+
+// 显示开始界面
+function showStartOverlay() {
+  startGameOverlay.classList.remove('hidden');
+  inputOriginOverlay.classList.add('hidden');
+}
+
+// 初始诗句配置
+const INITIAL_POEM = {
+  text: "春江潮水连海平",
+  x: 0,
+  y: 0,
+  direction: "H",
+  turn: 1
+};
+
+// 显示输入初始诗句界面
+function showInputOverlay() {
+  startGameOverlay.classList.add('hidden');
+  inputOriginOverlay.classList.remove('hidden');
+  if (initialPoemInput) {
+    initialPoemInput.value = '';
+    initialPoemInput.focus();
+  }
+}
+
+// 开始游戏（输入初始诗句后）
+function startGameWithInitialPoem() {
+  const text = initialPoemInput.value.trim();
+  if (!text || text.length === 0) {
+    showInitError('请输入起始诗句');
+    return;
+  }
+  
+  // 隐藏 overlay
+  inputOriginOverlay.classList.add('hidden');
+  
+  // 设置初始诗句
+  INITIAL_POEM.text = text;
+  
+  // 初始化游戏
+  initGame();
+}
+
+// 显示初始输入错误
+function showInitError(message) {
+  if (initError) {
+    initError.textContent = message;
+    initError.classList.remove('hidden');
+  }
+}
+
+// 隐藏初始输入错误
+function hideInitError() {
+  if (initError) {
+    initError.textContent = '';
+    initError.classList.add('hidden');
+  }
+}
 
 // Overlay 元素
 const startGameOverlay = document.getElementById('start-game-overlay');
