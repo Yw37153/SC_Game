@@ -863,6 +863,14 @@ let lastMouseY = 0;
 
 // 常量
 const CELL_SIZE = 60;
+
+// 显示开始界面
+function showStartOverlay() {
+  startGameOverlay.classList.remove('hidden');
+  inputOriginOverlay.classList.add('hidden');
+}
+
+// 初始诗句配置
 const INITIAL_POEM = {
   text: "春江潮水连海平",
   x: 0,
@@ -871,27 +879,142 @@ const INITIAL_POEM = {
   turn: 1
 };
 
-// DOM元素
-const gameCanvas = document.getElementById('game-canvas');
-const leftPanel = document.getElementById('left-panel');
-const statusLabel = document.getElementById('status-label');
-const turnCount = document.getElementById('turn-count');
-const poemCount = document.getElementById('poem-count');
-const draftBar = document.getElementById('draft-bar');
-const poemInput = document.getElementById('poem-input');
-const cancelBtn = document.getElementById('cancel-btn');
-const confirmBtn = document.getElementById('confirm-btn');
-const draftError = document.getElementById('draft-error');
-const directionBtn = document.getElementById('direction-btn');
+// 显示输入初始诗句界面
+function showInputOverlay() {
+  startGameOverlay.classList.add('hidden');
+  inputOriginOverlay.classList.remove('hidden');
+  if (initialPoemInput) {
+    initialPoemInput.value = '';
+    initialPoemInput.focus();
+  }
+}
+
+// 开始游戏（输入初始诗句后）
+function startGameWithInitialPoem() {
+  const text = initialPoemInput.value.trim();
+  if (!text || text.length === 0) {
+    showInitError('请输入起始诗句');
+    return;
+  }
+  
+  // 隐藏 overlay
+  inputOriginOverlay.classList.add('hidden');
+  
+  // 设置初始诗句
+  INITIAL_POEM.text = text;
+  
+  // 初始化游戏
+  initGame();
+}
+
+// 显示初始输入错误
+function showInitError(message) {
+  if (initError) {
+    initError.textContent = message;
+    initError.classList.remove('hidden');
+  }
+}
+
+// 隐藏初始输入错误
+function hideInitError() {
+  if (initError) {
+    initError.textContent = '';
+    initError.classList.add('hidden');
+  }
+}
+
+// Overlay 元素
+const startGameOverlay = document.getElementById('start-game-overlay');
+const inputOriginOverlay = document.getElementById('input-origin-overlay');
+const initialPoemInput = document.getElementById('initial-poem-input');
+const initError = document.getElementById('init-error');
+
+// 游戏状态
+const gameState = {
+  poems: [],
+  cells: new Map(),
+  currentTurn: 1,
+  draftMode: false,
+  draft: null,
+  hoveredCell: null,
+  selectedSource: null,
+  highlightedCells: [],
+  canvas: {
+    scale: 1,
+    offsetX: 0,
+    offsetY: 0
+  }
+};
+
+// 拖拽状态
+let isDragging = false;
+let lastMouseX = 0;
+let lastMouseY = 0;
+
+// 常量
+const CELL_SIZE = 60;
+
+// 显示开始界面
+function showStartOverlay() {
+  startGameOverlay.classList.remove('hidden');
+  inputOriginOverlay.classList.add('hidden');
+}
+
+// 初始诗句配置
+const INITIAL_POEM = {
+  text: "春江潮水连海平",
+  x: 0,
+  y: 0,
+  direction: "H",
+  turn: 1
+};
+
+// 显示输入初始诗句界面
+function showInputOverlay() {
+  startGameOverlay.classList.add('hidden');
+  inputOriginOverlay.classList.remove('hidden');
+  if (initialPoemInput) {
+    initialPoemInput.value = '';
+    initialPoemInput.focus();
+  }
+}
+
+// 开始游戏（输入初始诗句后）
+function startGameWithInitialPoem() {
+  const text = initialPoemInput.value.trim();
+  if (!text || text.length === 0) {
+    showInitError('请输入起始诗句');
+    return;
+  }
+  
+  // 隐藏 overlay
+  inputOriginOverlay.classList.add('hidden');
+  
+  // 设置初始诗句
+  INITIAL_POEM.text = text;
+  
+  // 初始化游戏
+  initGame();
+}
+
+// 显示初始输入错误
+function showInitError(message) {
+  if (initError) {
+    initError.textContent = message;
+    initError.classList.remove('hidden');
+  }
+}
+
+// 隐藏初始输入错误
+function hideInitError() {
+  if (initError) {
+    initError.textContent = '';
+    initError.classList.add('hidden');
+  }
+}
 
 // 初始化游戏
 function initGame() {
-  // 初始化输入系统
-  InputManager.init();
-
-  // 初始化触摸UI
-  TouchUI.init();
-
   // 初始化画布
   initCanvas();
 
@@ -917,15 +1040,15 @@ function startGame() {
   overlay.classList.add('hidden');
 }
 
+function startGame() {
+  const overlay = document.getElementById('start-game-overlay');
+  overlay.classList.add('hidden');
+}
+
 function resizeCanvas() {
   gameCanvas.width = window.innerWidth;
   gameCanvas.height = window.innerHeight;
   drawCanvas();
-}
-
-//开始界面
-function startOverlay() {
-  
 }
 
 //开始界面
@@ -1216,22 +1339,33 @@ function drawDirectionSelector(ctx) {
   });
 }
 
-// 启动输入处理循环
-function startInputProcessingLoop() {
-  function processInputLoop() {
-    InputManager.processEvents();
-    requestAnimationFrame(processInputLoop);
-  }
-  processInputLoop();
+// 设置事件监听
+function setupEventListeners() {
+  // 画布点击事件
+  gameCanvas.addEventListener('click', handleCanvasClick);
+
+  // 鼠标移动事件
+  gameCanvas.addEventListener('mousemove', handleMouseMove);
+
+  // 鼠标拖拽事件
+  gameCanvas.addEventListener('mousedown', handleMouseDown);
+  gameCanvas.addEventListener('mousemove', handleMouseMoveForDrag);
+  gameCanvas.addEventListener('mouseup', handleMouseUp);
+  gameCanvas.addEventListener('mouseleave', handleMouseUp);
+
+  // 滚轮缩放事件
+  gameCanvas.addEventListener('wheel', handleWheelZoom);
+
+  // 输入框事件
+  poemInput.addEventListener('input', handleInputChange);
+
+  // 按钮事件
+  cancelBtn.addEventListener('click', exitDraftMode);
+  confirmBtn.addEventListener('click', confirmDraft);
+
+  // 键盘事件
+  document.addEventListener('keydown', handleKeyDown);
 }
-
-// 输入框事件 (保持独立，因为它们不通过InputManager)
-poemInput.addEventListener('input', handleInputChange);
-
-// 按钮事件 (保持独立)
-cancelBtn.addEventListener('click', exitDraftMode);
-confirmBtn.addEventListener('click', confirmDraft);
-directionBtn.addEventListener('click', toggleDraftDirection);
 
 // 处理画布点击
 function handleCanvasClick(e) {
@@ -1567,6 +1701,45 @@ function resetView() {
 }
 
 // 初始化游戏
+// 页面加载完成后设置事件监听
+window.addEventListener('DOMContentLoaded', () => {
+  // 开始界面点击事件
+  if (startGameOverlay) {
+    startGameOverlay.addEventListener('click', () => {
+      showInputOverlay();
+    });
+  }
+  
+  // 初始诗句输入框事件
+  if (initialPoemInput) {
+    initialPoemInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        startGameWithInitialPoem();
+      } else {
+        hideInitError();
+      }
+    });
+  }
+  
+  // 草稿栏按钮事件
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', exitDraftMode);
+  }
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', confirmDraft);
+  }
+  if (directionBtn) {
+    directionBtn.addEventListener('click', toggleDraftDirection);
+  }
+  
+  // 输入框事件
+  if (poemInput) {
+    poemInput.addEventListener('input', handleInputChange);
+  }
+  
+  // 显示开始界面
+  showStartOverlay();
+});
 // 页面加载完成后设置事件监听
 window.addEventListener('DOMContentLoaded', () => {
   // 开始界面点击事件
