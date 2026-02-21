@@ -31,53 +31,27 @@
         </div>
     </div>
 
+    <!-- 欢迎界面 - 标题 -->
     <div id="start-game-overlay" class="overlay">
         <div class="overlay-content">
-            <h2>欢迎来到诗词地图！</h2>
-            <h3>点击任意位置开始游戏</h3>
+            <h1 class="game-title">诗词接龙</h1>
+            <p class="game-subtitle">在诗词的世界里穿行，连接文字的美好</p>
+            <p class="click-hint">点击任意处继续</p>
         </div>
     </div>
 
-    <div id="input-origin-overlay" class="overlay">
+    <!-- 输入起始诗句界面 -->
+    <div id="input-origin-overlay" class="overlay hidden">
         <div class="overlay-content">
-            <h2>从哪开始？</h2>
+            <h2 style="font-weight: 300; letter-spacing: 2px;">从哪开始</h2>
+            <p class="input-hint">输入一句诗词开始游戏</p>
             <div id="initInput">
-                <input type="text" id="initial-poem-input" placeholder="输入起始诗句..." maxlength="20">
-                <div id="init-error" class="draft-error hidden"></div>
+                <input type="text" id="initial-poem-input" placeholder="春眠不觉晓" maxlength="20">
+                <div id="init-error" class="error-message hidden"></div>
             </div>
-        </div>
-    </div>
-
-    <div id="start-game-overlay" class="overlay">
-        <div class="overlay-content">
-            <h2>欢迎来到诗词地图！</h2>
-            <h3>点击任意位置开始游戏</h3>
-        </div>
-    </div>
-
-    <div id="input-origin-overlay" class="overlay">
-        <div class="overlay-content">
-            <h2>从哪开始？</h2>
-            <div id="initInput">
-                <input type="text" id="initial-poem-input" placeholder="输入起始诗句..." maxlength="20">
-                <div id="init-error" class="draft-error hidden"></div>
-            </div>
-        </div>
-    </div>
-
-    <div id="start-game-overlay" class="overlay">
-        <div class="overlay-content">
-            <h2>欢迎来到诗词地图！</h2>
-            <h3>点击任意位置开始游戏</h3>
-        </div>
-    </div>
-
-    <div id="input-origin-overlay" class="overlay">
-        <div class="overlay-content">
-            <h2>从哪开始？</h2>
-            <div id="initInput">
-                <input type="text" id="initial-poem-input" placeholder="输入起始诗句..." maxlength="20">
-                <div id="init-error" class="draft-error hidden"></div>
+            <div class="input-actions">
+                <button id="back-btn" class="btn">返回</button>
+                <button id="begin-game-btn" class="btn primary">开始</button>
             </div>
         </div>
     </div>
