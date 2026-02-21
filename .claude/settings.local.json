@@ -6,7 +6,8 @@
       "Bash(test -f:*)",
       "Bash(gh pr list:*)",
       "Bash(openspec status:*)",
-      "Bash(openspec instructions:*)"
+      "Bash(openspec instructions:*)",
+      "Bash(openspec new:*)"
     ]
   }
 }
