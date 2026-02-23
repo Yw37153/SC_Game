@@ -1228,6 +1228,113 @@ function setupEventListeners() {
   gameCanvas.addEventListener('mouseleave', handleMouseUp);
   gameCanvas.addEventListener('wheel', handleWheelZoom, { passive: false });
   document.addEventListener('keydown', handleKeyDown);
+
+  // 触摸事件
+  gameCanvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+  gameCanvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+  gameCanvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+}
+
+// ===== 触摸事件处理 =====
+let touchStartX = 0, touchStartY = 0;
+let touchStartTime = 0;
+let lastTouchDist = 0; // 双指缩放
+
+function getTouchPos(touch) {
+  const rect = gameCanvas.getBoundingClientRect();
+  const scaleX = gameCanvas.width / rect.width;
+  const scaleY = gameCanvas.height / rect.height;
+  return {
+    x: (touch.clientX - rect.left) * scaleX,
+    y: (touch.clientY - rect.top) * scaleY,
+    clientX: touch.clientX,
+    clientY: touch.clientY,
+  };
+}
+
+function handleTouchStart(e) {
+  if (gameState.draftMode) return;
+  e.preventDefault();
+
+  if (e.touches.length === 2) {
+    // 双指缩放开始
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    lastTouchDist = Math.sqrt(dx * dx + dy * dy);
+    return;
+  }
+
+  const t = e.touches[0];
+  const pos = getTouchPos(t);
+  touchStartX = pos.clientX;
+  touchStartY = pos.clientY;
+  touchStartTime = Date.now();
+  lastMouseX = pos.clientX;
+  lastMouseY = pos.clientY;
+  isDragging = true;
+}
+
+function handleTouchMove(e) {
+  if (gameState.draftMode) return;
+  e.preventDefault();
+
+  if (e.touches.length === 2) {
+    // 双指缩放
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+    const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+
+    if (lastTouchDist > 0) {
+      const delta = dist / lastTouchDist;
+      const newScale = gameState.canvas.scale * delta;
+      if (newScale >= 0.3 && newScale <= 3) {
+        const rect = gameCanvas.getBoundingClientRect();
+        const mx = (centerX - rect.left) * (gameCanvas.width / rect.width);
+        const my = (centerY - rect.top) * (gameCanvas.height / rect.height);
+        const cx = gameCanvas.width / 2 + gameState.canvas.offsetX;
+        const cy = gameCanvas.height / 2 + gameState.canvas.offsetY;
+        gameState.canvas.offsetX += (mx - cx) * (1 - delta);
+        gameState.canvas.offsetY += (my - cy) * (1 - delta);
+        gameState.canvas.scale = newScale;
+        drawCanvas();
+      }
+    }
+    lastTouchDist = dist;
+    return;
+  }
+
+  if (!isDragging) return;
+  const t = e.touches[0];
+  const deltaX = t.clientX - lastMouseX;
+  const deltaY = t.clientY - lastMouseY;
+  gameState.canvas.offsetX += deltaX;
+  gameState.canvas.offsetY += deltaY;
+  lastMouseX = t.clientX;
+  lastMouseY = t.clientY;
+  drawCanvas();
+}
+
+function handleTouchEnd(e) {
+  if (gameState.draftMode) return;
+  e.preventDefault();
+  lastTouchDist = 0;
+
+  if (e.changedTouches.length === 0) { isDragging = false; return; }
+  const t = e.changedTouches[0];
+  const duration = Date.now() - touchStartTime;
+  const dx = t.clientX - touchStartX;
+  const dy = t.clientY - touchStartY;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+
+  isDragging = false;
+
+  // 判定为点击：移动距离小、时间短
+  if (dist < 10 && duration < 300) {
+    const pos = getTouchPos(t);
+    handleCanvasClick({ clientX: t.clientX, clientY: t.clientY });
+  }
 }
 
 // 处理画布点击
@@ -1504,14 +1611,16 @@ function updateFloatingInputPosition() {
   const pixelY = centerY + currentCell.y * CELL_SIZE * scale;
 
   const rect = gameCanvas.getBoundingClientRect();
+  const cellW = CELL_SIZE * scale;
+  const cellH = CELL_SIZE * scale;
 
-  floatingInput.style.left = `${rect.left + pixelX}px`;
-  floatingInput.style.top = `${rect.top + pixelY}px`;
-  floatingInput.style.width = `${CELL_SIZE * scale}px`;
-  floatingInput.style.height = `${CELL_SIZE * scale}px`;
+  // 加上 window.scrollX/Y 修正移动端偏移
+  floatingInput.style.left = `${rect.left + window.scrollX + pixelX}px`;
+  floatingInput.style.top = `${rect.top + window.scrollY + pixelY}px`;
+  floatingInput.style.width = `${cellW}px`;
+  floatingInput.style.height = `${cellH}px`;
   floatingInput.style.fontSize = `${24 * scale}px`;
 
-  // Set current value
   floatingInput.value = currentCell.char || '';
 }
 
