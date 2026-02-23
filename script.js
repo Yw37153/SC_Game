@@ -11,180 +11,6 @@ const INITIAL_POEM = {
   direction: "H"
 };
 
-// 交叉流程状态机
-class CrossoverFlowState {
-  constructor() {
-    this.step = 'IDLE'; // IDLE, SELECT_ANCHOR, SELECT_START, INPUT_POEM
-    this.anchorPosition = null; // {x, y, character}
-    this.startPosition = null;  // {x, y}
-    this.inputPath = [];         // 计算出的输入路径数组 [{x, y}, ...]
-    this.confirmed = false;
-  }
-
-  // 前进到下一步
-  nextStep() {
-    switch (this.step) {
-      case 'IDLE':
-        this.step = 'SELECT_ANCHOR';
-        break;
-      case 'SELECT_ANCHOR':
-        this.step = 'SELECT_START';
-        break;
-      case 'SELECT_START':
-        this.step = 'INPUT_POEM';
-        break;
-      case 'INPUT_POEM':
-        this.step = 'IDLE';
-        this.clear();
-        break;
-    }
-  }
-
-  // 返回上一步
-  previousStep() {
-    switch (this.step) {
-      case 'SELECT_ANCHOR':
-        this.step = 'IDLE';
-        this.anchorPosition = null;
-        break;
-      case 'SELECT_START':
-        this.step = 'SELECT_ANCHOR';
-        this.startPosition = null;
-        this.inputPath = [];
-        break;
-      case 'INPUT_POEM':
-        this.step = 'SELECT_START';
-        break;
-    }
-  }
-
-  // 取消并重置
-  cancel() {
-    this.step = 'IDLE';
-    this.clear();
-  }
-
-  // 清除所有选择
-  clear() {
-    this.anchorPosition = null;
-    this.startPosition = null;
-    this.inputPath = [];
-    this.confirmed = false;
-  }
-
-  // 设置锚点位置
-  setAnchor(x, y, character) {
-    this.anchorPosition = { x, y, character };
-    this.nextStep();
-  }
-
-  // 设置起始位置
-  setStartPosition(x, y) {
-    this.startPosition = { x, y };
-    this.nextStep();
-  }
-
-  // 设置输入路径
-  setInputPath(path) {
-    this.inputPath = path;
-  }
-
-  // 检查是否处于特定状态
-  isInStep(step) {
-    return this.step === step;
-  }
-
-  // 获取当前状态信息
-  getStateInfo() {
-    return {
-      step: this.step,
-      hasAnchor: !!this.anchorPosition,
-      hasStart: !!this.startPosition,
-      pathLength: this.inputPath.length
-    };
-  }
-}
-
-// 路径计算工具函数
-class PathCalculator {
-  // 检查两个位置是否在同一行或同一列
-  static isValidPath(startX, startY, anchorX, anchorY) {
-    return startX === anchorX || startY === anchorY;
-  }
-
-  // 计算从起始位置到锚点的路径
-  static calculatePath(startX, startY, anchorX, anchorY) {
-    const path = [];
-
-    if (startX === anchorX) {
-      // 垂直路径
-      const minY = Math.min(startY, anchorY);
-      const maxY = Math.max(startY, anchorY);
-
-      for (let y = minY; y <= maxY; y++) {
-        path.push({ x: startX, y });
-      }
-    } else if (startY === anchorY) {
-      // 水平路径
-      const minX = Math.min(startX, anchorX);
-      const maxX = Math.max(startX, anchorX);
-
-      for (let x = minX; x <= maxX; x++) {
-        path.push({ x, y: startY });
-      }
-    }
-
-    return path;
-  }
-
-  // 验证起始位置是否有效（空格子且与锚点在同一行/列）
-  static validateStartPosition(startX, startY, anchorX, anchorY) {
-    // 检查是否在同一行或同一列
-    if (!this.isValidPath(startX, startY, anchorX, anchorY)) {
-      return { valid: false, reason: 'not_aligned' };
-    }
-
-    // 检查起始位置是否已被占用
-    const key = `${startX},${startY}`;
-    if (gameState.cells.has(key)) {
-      return { valid: false, reason: 'occupied' };
-    }
-
-    return { valid: true };
-  }
-
-  // 获取锚点周围所有可能的有效起始位置
-  static getValidStartPositions(anchorX, anchorY, gridSize = 20) {
-    const validPositions = [];
-
-    // 检查同一行的所有位置
-    for (let x = -gridSize; x <= gridSize; x++) {
-      if (x === anchorX) continue;
-
-      const validation = this.validateStartPosition(x, anchorY, anchorX, anchorY);
-      if (validation.valid) {
-        validPositions.push({ x, y: anchorY, reason: 'valid' });
-      } else {
-        validPositions.push({ x, y: anchorY, reason: validation.reason });
-      }
-    }
-
-    // 检查同一列的所有位置
-    for (let y = -gridSize; y <= gridSize; y++) {
-      if (y === anchorY) continue;
-
-      const validation = this.validateStartPosition(anchorX, y, anchorX, anchorY);
-      if (validation.valid) {
-        validPositions.push({ x: anchorX, y, reason: 'valid' });
-      } else {
-        validPositions.push({ x: anchorX, y, reason: validation.reason });
-      }
-    }
-
-    return validPositions;
-  }
-}
-
 // 游戏状态
 const gameState = {
   poems: [],
@@ -204,16 +30,8 @@ const gameState = {
   draftMode: false,
   draft: null,
   inputMode: false,
-  // 交叉流程状态机
-  crossoverFlow: new CrossoverFlowState(),
-  // 设置选项
-  settings: {
-    enableNewCrossoverFlow: true // 是否启用新的三步式交叉流程
-  },
-  // 保留原有字段以兼容现有代码（后续可逐步移除）
-  selectedCell: null, // 当前选中的字（交叉点）
-  startPoint: null,   // 起点格子 {x, y, direction}
-  selectedDirection: null // selectedDirection: 'H' 或 'V'
+  selectedCell: null,
+  directionSelector: null
 };
 
 // 拖拽状态
@@ -1010,7 +828,6 @@ const poemCount = document.getElementById('poem-count');
 const draftBar = document.getElementById('draft-bar');
 const poemInput = document.getElementById('poem-input');
 const cancelBtn = document.getElementById('cancel-btn');
-const backBtn = document.getElementById('back-btn');
 const confirmBtn = document.getElementById('confirm-btn');
 const undoBtn = document.getElementById('undo-btn');
 const redoBtn = document.getElementById('redo-btn');
@@ -1109,12 +926,6 @@ function drawCanvas() {
   if (gameState.inputMode && gameState.draft) {
     drawInputCells(ctx);
   }
-
-  // 绘制交叉流程状态
-  drawCrossoverFlowState(ctx);
-
-  // 更新状态提示
-  updateStatusText();
 
   // 更新浮动输入框位置
   if (floatingInput) {
@@ -1280,34 +1091,13 @@ function drawPoems(ctx) {
         ctx.fillStyle = '#1a1a1a';
         ctx.font = `${32 * scale}px "Noto Serif SC", "SimSun", serif`;
       } else {
-        // 检查是否是交叉点（与其他诗句共享）
-        const key = `${x},${y}`;
-        const cell = gameState.cells.get(key);
-        const isIntersection = cell && cell.poemIndex !== gameState.poems.indexOf(poem);
-
-        if (isIntersection) {
-          // 交叉字符：特殊背景
-          ctx.fillStyle = '#e8f5e9'; // Light green background
-          ctx.fillRect(pixelX, pixelY, CELL_SIZE * scale, CELL_SIZE * scale);
-
-          // 绘制交叉标记（小圆点）
-          ctx.beginPath();
-          ctx.arc(pixelX + CELL_SIZE * scale / 2, pixelY + CELL_SIZE * scale - 4 * scale, 3 * scale, 0, Math.PI * 2);
-          ctx.fillStyle = '#4CAF50';
-          ctx.fill();
-
-          ctx.strokeStyle = '#81c784';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(pixelX, pixelY, CELL_SIZE * scale, CELL_SIZE * scale);
-        } else {
-          // 普通字：正常绘制
-          ctx.fillStyle = 'white';
-          ctx.strokeStyle = '#ccc';
-          ctx.lineWidth = 1;
-          ctx.fillRect(pixelX, pixelY, CELL_SIZE * scale, CELL_SIZE * scale);
-          ctx.strokeRect(pixelX, pixelY, CELL_SIZE * scale, CELL_SIZE * scale);
-        }
-
+        // 普通字：正常绘制
+        ctx.fillStyle = 'white';
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.fillRect(pixelX, pixelY, CELL_SIZE * scale, CELL_SIZE * scale);
+        ctx.strokeRect(pixelX, pixelY, CELL_SIZE * scale, CELL_SIZE * scale);
+        
         ctx.fillStyle = '#333';
         ctx.font = `${24 * scale}px "Noto Serif SC", "SimSun", serif`;
       }
@@ -1336,56 +1126,35 @@ function drawDirectionSelector(ctx, cell) {
   const cellPixelY = centerY + cell.y * CELL_SIZE * scale;
   const cellSize = CELL_SIZE * scale;
 
-  // 在交叉点周围绘制四个方向的可选起点格子
+  // 绘制四个方向的箭头
   const directions = [
-    { dx: 0, dy: -1, label: '上' },
-    { dx: 0, dy: 1, label: '下' },
-    { dx: -1, dy: 0, label: '左' },
-    { dx: 1, dy: 0, label: '右' }
+    { dx: 0, dy: -1, text: '↑', dir: 'V' },
+    { dx: 0, dy: 1, text: '↓', dir: 'V' },
+    { dx: -1, dy: 0, text: '←', dir: 'H' },
+    { dx: 1, dy: 0, text: '→', dir: 'H' }
   ];
 
-  // 绘制虚线箭头提示
-  ctx.strokeStyle = 'rgba(76, 175, 80, 0.6)';
-  ctx.lineWidth = 2;
-  ctx.setLineDash([5 * scale, 5 * scale]);
+  ctx.font = `${20 * scale}px Arial`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
 
   directions.forEach(dir => {
-    const startX = cellPixelX;
-    const startY = cellPixelY;
-    const endX = cellPixelX + dir.dx * 1.5 * cellSize;
-    const endY = cellPixelY + dir.dy * 1.5 * cellSize;
+    const arrowX = cellPixelX + CELL_SIZE * scale / 2 + dir.dx * CELL_SIZE * scale;
+    const arrowY = cellPixelY + CELL_SIZE * scale / 2 + dir.dy * CELL_SIZE * scale;
 
-    // 绘制箭头
+    // 绘制按钮背景
+    ctx.fillStyle = 'white';
+    ctx.strokeStyle = '#4CAF50';
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(startX, startY);
-    ctx.lineTo(endX, endY);
+    ctx.arc(arrowX, arrowY, 15 * scale, 0, Math.PI * 2);
+    ctx.fill();
     ctx.stroke();
 
-    // 绘制箭头头部
-    const arrowSize = 10 * scale;
-    const angle = Math.atan2(endY - startY, endX - startX);
-    ctx.beginPath();
-    ctx.moveTo(endX, endY);
-    ctx.lineTo(
-      endX - arrowSize * Math.cos(angle - Math.PI / 6),
-      endY - arrowSize * Math.sin(angle - Math.PI / 6)
-    );
-    ctx.lineTo(
-      endX - arrowSize * Math.cos(angle + Math.PI / 6),
-      endY - arrowSize * Math.sin(angle + Math.PI / 6)
-    );
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(76, 175, 80, 0.6)';
-    ctx.fill();
+    // 绘制箭头
+    ctx.fillStyle = '#4CAF50';
+    ctx.fillText(dir.text, arrowX, arrowY);
   });
-
-  ctx.setLineDash([]); // 重置虚线
-
-  // 显示提示文字
-  ctx.fillStyle = 'rgba(76, 175, 80, 0.9)';
-  ctx.font = `${14 * scale}px "Noto Serif SC", "SimSun", serif`;
-  ctx.textAlign = 'center';
-  ctx.fillText('点击选择起点', cellPixelX, cellPixelY + 2.5 * cellSize);
 }
 
 // 绘制输入方格
@@ -1444,7 +1213,7 @@ function drawInputCells(ctx) {
       ctx.font = `${24 * scale}px "Noto Serif SC", "SimSun", serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(charToDraw, pixelX + cellSize / 2, pixelY + cellSize / 2);
+      ctx.fillText(cell.char, pixelX + cellSize / 2, pixelY + cellSize / 2);
     }
   });
 }
@@ -1631,7 +1400,7 @@ function handleInputChange() {}
 // 计算输入方格位置
 function calculateInputCellPositions() {
   const draft = gameState.draft;
-  if (!draft || !draft.path || !draft.path.length) return;
+  if (!draft) return;
 
   const maxCells = 20;
   draft.inputCells = [];
@@ -1950,7 +1719,6 @@ function confirmDraft() {
   };
 
   gameState.poems.push(newPoem);
-  const newPoemIndex = gameState.poems.length - 1;
 
   // 记录本回合新增的 cell keys（用于撤销）
   const newKeys = [];
@@ -1977,16 +1745,6 @@ function confirmDraft() {
 
 // 处理键盘事件
 function handleKeyDown(e) {
-  const crossoverFlow = gameState.crossoverFlow;
-
-  // 处理交叉流程的键盘事件
-  if (crossoverFlow.step !== 'IDLE' && e.key === 'Escape') {
-    crossoverFlow.cancel();
-    clearOldState();
-    drawCanvas();
-    return;
-  }
-
   if (gameState.draftMode) {
     if (e.key === 'Escape') {
       exitDraftMode();
@@ -2108,24 +1866,6 @@ function handleMouseMoveForDrag(e) {
 
   // 重绘画布
   drawCanvas();
-}
-
-// 显示输入错误提示
-function showErrorMessage(message) {
-  const errorDiv = document.getElementById('init-error');
-
-  if (errorDiv) {
-    errorDiv.textContent = message;
-    errorDiv.classList.remove('hidden');
-  }
-
-  // Also show in the input bar if available
-  statusLabel.textContent = message;
-  statusLabel.style.color = '#c44';
-  setTimeout(() => {
-    statusLabel.style.color = '#666';
-    updateStatusText();
-  }, 2000);
 }
 
 // 处理鼠标抬起（结束拖拽）
@@ -2361,12 +2101,6 @@ function restoreFromSave(data) {
 // 初始化游戏
 // 页面加载完成后设置事件监听
 window.addEventListener('DOMContentLoaded', () => {
-  // 初始化触摸优化
-  initializeTouchOptimization();
-
-  // 初始化默认模式
-  initializeDefaultMode();
-
   // 开始界面 - 点击任意处继续
   const startOverlay = document.getElementById('start-game-overlay');
   if (startOverlay) {
