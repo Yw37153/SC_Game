@@ -33,6 +33,35 @@ body {
   min-width: 200px;
 }
 
+.panel .settings {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #eee;
+}
+
+.panel .setting-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #666;
+  cursor: pointer;
+}
+
+#settings-menu {
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.panel .setting-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
 .panel h1 {
   font-size: 20px;
   margin-bottom: 10px;
