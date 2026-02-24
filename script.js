@@ -583,8 +583,8 @@ class TouchInputProvider extends InputProvider {
     this.touchZones.set('canvas', {
       x: 0,
       y: 0,
-      width: gameCanvas.width,
-      height: gameCanvas.height,
+      width: window.innerWidth,
+      height: window.innerHeight,
       action: 'canvas'
     });
 
@@ -868,8 +868,22 @@ function startGame() {
 }
 
 function resizeCanvas() {
-  gameCanvas.width = window.innerWidth;
-  gameCanvas.height = window.innerHeight;
+  const dpr = window.devicePixelRatio || 1;
+  const cssWidth = window.innerWidth;
+  const cssHeight = window.innerHeight;
+
+  // 物理像素尺寸（Retina 屏上为 CSS 尺寸的 dpr 倍）
+  gameCanvas.width = Math.round(cssWidth * dpr);
+  gameCanvas.height = Math.round(cssHeight * dpr);
+
+  // 保持 CSS 显示尺寸不变
+  gameCanvas.style.width = cssWidth + 'px';
+  gameCanvas.style.height = cssHeight + 'px';
+
+  // 缩放上下文，使后续绘制以物理像素为单位
+  const ctx = gameCanvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
   drawCanvas();
 }
 
@@ -904,7 +918,7 @@ function addInitialPoem() {
 // 绘制画布
 function drawCanvas() {
   const ctx = gameCanvas.getContext('2d');
-  ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+  ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
   // 绘制网格
   drawGrid(ctx);
@@ -937,15 +951,15 @@ function drawCanvas() {
 function drawHighlightedCells(ctx) {
   if (!gameState.selectedCell) return;
 
-  const centerX = gameCanvas.width / 2 + gameState.canvas.offsetX;
-  const centerY = gameCanvas.height / 2 + gameState.canvas.offsetY;
+  const centerX = window.innerWidth / 2 + gameState.canvas.offsetX;
+  const centerY = window.innerHeight / 2 + gameState.canvas.offsetY;
   const scale = gameState.canvas.scale;
   const cellSize = CELL_SIZE * scale;
 
   const visLeft = Math.floor(-centerX / cellSize) - 1;
-  const visRight = Math.ceil((gameCanvas.width - centerX) / cellSize) + 1;
+  const visRight = Math.ceil((window.innerWidth - centerX) / cellSize) + 1;
   const visTop = Math.floor(-centerY / cellSize) - 1;
-  const visBottom = Math.ceil((gameCanvas.height - centerY) / cellSize) + 1;
+  const visBottom = Math.ceil((window.innerHeight - centerY) / cellSize) + 1;
 
   const sx = gameState.selectedCell.x;
   const sy = gameState.selectedCell.y;
@@ -1031,8 +1045,8 @@ function drawGrid(ctx) {
   ctx.strokeStyle = '#e0e0e0';
   ctx.lineWidth = 1;
 
-  const centerX = gameCanvas.width / 2 + gameState.canvas.offsetX;
-  const centerY = gameCanvas.height / 2 + gameState.canvas.offsetY;
+  const centerX = window.innerWidth / 2 + gameState.canvas.offsetX;
+  const centerY = window.innerHeight / 2 + gameState.canvas.offsetY;
   const scale = gameState.canvas.scale;
 
   const cellSize = CELL_SIZE * scale;
@@ -1040,26 +1054,26 @@ function drawGrid(ctx) {
   const startY = Math.floor(-centerY / cellSize) * cellSize + centerY;
 
   // 垂直线
-  for (let x = startX; x < gameCanvas.width; x += cellSize) {
+  for (let x = startX; x < window.innerWidth; x += cellSize) {
     ctx.beginPath();
     ctx.moveTo(x, 0);
-    ctx.lineTo(x, gameCanvas.height);
+    ctx.lineTo(x, window.innerHeight);
     ctx.stroke();
   }
 
   // 水平线
-  for (let y = startY; y < gameCanvas.height; y += cellSize) {
+  for (let y = startY; y < window.innerHeight; y += cellSize) {
     ctx.beginPath();
     ctx.moveTo(0, y);
-    ctx.lineTo(gameCanvas.width, y);
+    ctx.lineTo(window.innerWidth, y);
     ctx.stroke();
   }
 }
 
 // 绘制诗句
 function drawPoems(ctx) {
-  const centerX = gameCanvas.width / 2 + gameState.canvas.offsetX;
-  const centerY = gameCanvas.height / 2 + gameState.canvas.offsetY;
+  const centerX = window.innerWidth / 2 + gameState.canvas.offsetX;
+  const centerY = window.innerHeight / 2 + gameState.canvas.offsetY;
   const scale = gameState.canvas.scale;
 
   gameState.poems.forEach(poem => {
@@ -1118,8 +1132,8 @@ function drawDraftPreview(ctx) {
 function drawDirectionSelector(ctx, cell) {
   if (!cell) return;
 
-  const centerX = gameCanvas.width / 2 + gameState.canvas.offsetX;
-  const centerY = gameCanvas.height / 2 + gameState.canvas.offsetY;
+  const centerX = window.innerWidth / 2 + gameState.canvas.offsetX;
+  const centerY = window.innerHeight / 2 + gameState.canvas.offsetY;
   const scale = gameState.canvas.scale;
 
   const cellPixelX = centerX + cell.x * CELL_SIZE * scale;
@@ -1162,8 +1176,8 @@ function drawInputCells(ctx) {
   const draft = gameState.draft;
   if (!draft || !draft.inputCells) return;
 
-  const centerX = gameCanvas.width / 2 + gameState.canvas.offsetX;
-  const centerY = gameCanvas.height / 2 + gameState.canvas.offsetY;
+  const centerX = window.innerWidth / 2 + gameState.canvas.offsetX;
+  const centerY = window.innerHeight / 2 + gameState.canvas.offsetY;
   const scale = gameState.canvas.scale;
   const cellSize = CELL_SIZE * scale;
 
@@ -1242,8 +1256,8 @@ let lastTouchDist = 0; // 双指缩放
 
 function getTouchPos(touch) {
   const rect = gameCanvas.getBoundingClientRect();
-  const scaleX = gameCanvas.width / rect.width;
-  const scaleY = gameCanvas.height / rect.height;
+  const scaleX = 1;
+  const scaleY = 1;
   return {
     x: (touch.clientX - rect.left) * scaleX,
     y: (touch.clientY - rect.top) * scaleY,
@@ -1291,10 +1305,10 @@ function handleTouchMove(e) {
       const newScale = gameState.canvas.scale * delta;
       if (newScale >= 0.3 && newScale <= 3) {
         const rect = gameCanvas.getBoundingClientRect();
-        const mx = (centerX - rect.left) * (gameCanvas.width / rect.width);
-        const my = (centerY - rect.top) * (gameCanvas.height / rect.height);
-        const cx = gameCanvas.width / 2 + gameState.canvas.offsetX;
-        const cy = gameCanvas.height / 2 + gameState.canvas.offsetY;
+        const mx = (centerX - rect.left) * (window.innerWidth / rect.width);
+        const my = (centerY - rect.top) * (window.innerHeight / rect.height);
+        const cx = window.innerWidth / 2 + gameState.canvas.offsetX;
+        const cy = window.innerHeight / 2 + gameState.canvas.offsetY;
         gameState.canvas.offsetX += (mx - cx) * (1 - delta);
         gameState.canvas.offsetY += (my - cy) * (1 - delta);
         gameState.canvas.scale = newScale;
@@ -1340,8 +1354,8 @@ function handleTouchEnd(e) {
 // 处理画布点击
 function handleCanvasClick(e) {
   const rect = gameCanvas.getBoundingClientRect();
-  const scaleX = gameCanvas.width / rect.width;
-  const scaleY = gameCanvas.height / rect.height;
+  const scaleX = 1;
+  const scaleY = 1;
   const clickX = (e.clientX - rect.left) * scaleX;
   const clickY = (e.clientY - rect.top) * scaleY;
 
@@ -1467,8 +1481,8 @@ function handleMouseMove(e) {
   }
 
   const rect = gameCanvas.getBoundingClientRect();
-  const scaleX = gameCanvas.width / rect.width;
-  const scaleY = gameCanvas.height / rect.height;
+  const scaleX = 1;
+  const scaleY = 1;
   const x = (e.clientX - rect.left) * scaleX;
   const y = (e.clientY - rect.top) * scaleY;
 
@@ -1490,8 +1504,8 @@ function handleMouseMove(e) {
 
 // 像素坐标转换为网格坐标
 function pixelToGrid(pixelX, pixelY) {
-  const centerX = gameCanvas.width / 2 + gameState.canvas.offsetX;
-  const centerY = gameCanvas.height / 2 + gameState.canvas.offsetY;
+  const centerX = window.innerWidth / 2 + gameState.canvas.offsetX;
+  const centerY = window.innerHeight / 2 + gameState.canvas.offsetY;
   const scale = gameState.canvas.scale;
 
   const gridX = Math.floor((pixelX - centerX) / (CELL_SIZE * scale));
@@ -1603,8 +1617,8 @@ function updateFloatingInputPosition() {
   const draft = gameState.draft;
   const currentCell = draft.inputCells[draft.currentInputIndex];
 
-  const centerX = gameCanvas.width / 2 + gameState.canvas.offsetX;
-  const centerY = gameCanvas.height / 2 + gameState.canvas.offsetY;
+  const centerX = window.innerWidth / 2 + gameState.canvas.offsetX;
+  const centerY = window.innerHeight / 2 + gameState.canvas.offsetY;
   const scale = gameState.canvas.scale;
 
   const pixelX = centerX + currentCell.x * CELL_SIZE * scale;
@@ -1995,8 +2009,8 @@ function handleWheelZoom(e) {
 
   // Get canvas bounding rect and calculate exact position
   const rect = gameCanvas.getBoundingClientRect();
-  const scaleX = gameCanvas.width / rect.width;
-  const scaleY = gameCanvas.height / rect.height;
+  const scaleX = 1;
+  const scaleY = 1;
   const mouseX = (e.clientX - rect.left) * scaleX;
   const mouseY = (e.clientY - rect.top) * scaleY;
 
@@ -2008,8 +2022,8 @@ function handleWheelZoom(e) {
   if (newScale < 0.3 || newScale > 3) return;
 
   // 计算鼠标在画布上的相对位置
-  const centerX = gameCanvas.width / 2 + gameState.canvas.offsetX;
-  const centerY = gameCanvas.height / 2 + gameState.canvas.offsetY;
+  const centerX = window.innerWidth / 2 + gameState.canvas.offsetX;
+  const centerY = window.innerHeight / 2 + gameState.canvas.offsetY;
 
   // 计算鼠标相对于画布中心的偏移
   const mouseOffsetX = mouseX - centerX;
