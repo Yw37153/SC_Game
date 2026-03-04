@@ -9,7 +9,9 @@ body {
   font-family: "Noto Serif SC", "SimSun", serif;
   overflow: hidden;
   width: 100vw;
+  /* 用 dvh 修复 iOS Safari 地址栏导致的底部空白；旧版浏览器降级到 100vh */
   height: 100vh;
+  height: 100dvh;
   background: white;
 }
 
@@ -31,6 +33,10 @@ body {
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   z-index: 100;
   min-width: 200px;
+  /* 防止在小屏/竖屏上超出视口 */
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
 }
 
 .panel h1 {

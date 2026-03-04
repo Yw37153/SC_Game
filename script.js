@@ -1,5 +1,9 @@
 // 诗词接龙游戏 - MVP版本
 
+// 视口尺寸工具函数 —— 使用 visualViewport 在 iOS Safari 上排除地址栏
+function vw() { return window.visualViewport ? window.visualViewport.width : vw(); }
+function vh() { return window.visualViewport ? window.visualViewport.height : vh(); }
+
 // 常量定义
 const CELL_SIZE = 50;
 
@@ -583,8 +587,8 @@ class TouchInputProvider extends InputProvider {
     this.touchZones.set('canvas', {
       x: 0,
       y: 0,
-      width: window.innerWidth,
-      height: window.innerHeight,
+      width: vw(),
+      height: vh(),
       action: 'canvas'
     });
 
@@ -860,6 +864,11 @@ function initCanvas() {
   const ctx = gameCanvas.getContext('2d');
   resizeCanvas();
   window.addEventListener('resize', resizeCanvas);
+  // iOS Safari 地址栏展开/收起时触发 visualViewport 事件
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', resizeCanvas);
+    window.visualViewport.addEventListener('scroll', resizeCanvas);
+  }
 }
 
 function startGame() {
@@ -869,8 +878,10 @@ function startGame() {
 
 function resizeCanvas() {
   const dpr = window.devicePixelRatio || 1;
-  const cssWidth = window.innerWidth;
-  const cssHeight = window.innerHeight;
+  // visualViewport 在 iOS Safari 上排除了地址栏，避免底部空白；旧版浏览器降级到 innerWidth/Height
+  const vvp = window.visualViewport;
+  const cssWidth = vvp ? vvp.width : window.innerWidth;
+  const cssHeight = vvp ? vvp.height : window.innerHeight;
 
   // 物理像素尺寸（Retina 屏上为 CSS 尺寸的 dpr 倍）
   gameCanvas.width = Math.round(cssWidth * dpr);
@@ -918,7 +929,7 @@ function addInitialPoem() {
 // 绘制画布
 function drawCanvas() {
   const ctx = gameCanvas.getContext('2d');
-  ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  ctx.clearRect(0, 0, vw(), vh());
 
   // 绘制网格
   drawGrid(ctx);
@@ -951,15 +962,15 @@ function drawCanvas() {
 function drawHighlightedCells(ctx) {
   if (!gameState.selectedCell) return;
 
-  const centerX = window.innerWidth / 2 + gameState.canvas.offsetX;
-  const centerY = window.innerHeight / 2 + gameState.canvas.offsetY;
+  const centerX = vw() / 2 + gameState.canvas.offsetX;
+  const centerY = vh() / 2 + gameState.canvas.offsetY;
   const scale = gameState.canvas.scale;
   const cellSize = CELL_SIZE * scale;
 
   const visLeft = Math.floor(-centerX / cellSize) - 1;
-  const visRight = Math.ceil((window.innerWidth - centerX) / cellSize) + 1;
+  const visRight = Math.ceil((vw() - centerX) / cellSize) + 1;
   const visTop = Math.floor(-centerY / cellSize) - 1;
-  const visBottom = Math.ceil((window.innerHeight - centerY) / cellSize) + 1;
+  const visBottom = Math.ceil((vh() - centerY) / cellSize) + 1;
 
   const sx = gameState.selectedCell.x;
   const sy = gameState.selectedCell.y;
@@ -1045,8 +1056,8 @@ function drawGrid(ctx) {
   ctx.strokeStyle = '#e0e0e0';
   ctx.lineWidth = 1;
 
-  const centerX = window.innerWidth / 2 + gameState.canvas.offsetX;
-  const centerY = window.innerHeight / 2 + gameState.canvas.offsetY;
+  const centerX = vw() / 2 + gameState.canvas.offsetX;
+  const centerY = vh() / 2 + gameState.canvas.offsetY;
   const scale = gameState.canvas.scale;
 
   const cellSize = CELL_SIZE * scale;
@@ -1054,26 +1065,26 @@ function drawGrid(ctx) {
   const startY = Math.floor(-centerY / cellSize) * cellSize + centerY;
 
   // 垂直线
-  for (let x = startX; x < window.innerWidth; x += cellSize) {
+  for (let x = startX; x < vw(); x += cellSize) {
     ctx.beginPath();
     ctx.moveTo(x, 0);
-    ctx.lineTo(x, window.innerHeight);
+    ctx.lineTo(x, vh());
     ctx.stroke();
   }
 
   // 水平线
-  for (let y = startY; y < window.innerHeight; y += cellSize) {
+  for (let y = startY; y < vh(); y += cellSize) {
     ctx.beginPath();
     ctx.moveTo(0, y);
-    ctx.lineTo(window.innerWidth, y);
+    ctx.lineTo(vw(), y);
     ctx.stroke();
   }
 }
 
 // 绘制诗句
 function drawPoems(ctx) {
-  const centerX = window.innerWidth / 2 + gameState.canvas.offsetX;
-  const centerY = window.innerHeight / 2 + gameState.canvas.offsetY;
+  const centerX = vw() / 2 + gameState.canvas.offsetX;
+  const centerY = vh() / 2 + gameState.canvas.offsetY;
   const scale = gameState.canvas.scale;
 
   gameState.poems.forEach(poem => {
@@ -1132,8 +1143,8 @@ function drawDraftPreview(ctx) {
 function drawDirectionSelector(ctx, cell) {
   if (!cell) return;
 
-  const centerX = window.innerWidth / 2 + gameState.canvas.offsetX;
-  const centerY = window.innerHeight / 2 + gameState.canvas.offsetY;
+  const centerX = vw() / 2 + gameState.canvas.offsetX;
+  const centerY = vh() / 2 + gameState.canvas.offsetY;
   const scale = gameState.canvas.scale;
 
   const cellPixelX = centerX + cell.x * CELL_SIZE * scale;
@@ -1176,8 +1187,8 @@ function drawInputCells(ctx) {
   const draft = gameState.draft;
   if (!draft || !draft.inputCells) return;
 
-  const centerX = window.innerWidth / 2 + gameState.canvas.offsetX;
-  const centerY = window.innerHeight / 2 + gameState.canvas.offsetY;
+  const centerX = vw() / 2 + gameState.canvas.offsetX;
+  const centerY = vh() / 2 + gameState.canvas.offsetY;
   const scale = gameState.canvas.scale;
   const cellSize = CELL_SIZE * scale;
 
@@ -1305,10 +1316,10 @@ function handleTouchMove(e) {
       const newScale = gameState.canvas.scale * delta;
       if (newScale >= 0.3 && newScale <= 3) {
         const rect = gameCanvas.getBoundingClientRect();
-        const mx = (centerX - rect.left) * (window.innerWidth / rect.width);
-        const my = (centerY - rect.top) * (window.innerHeight / rect.height);
-        const cx = window.innerWidth / 2 + gameState.canvas.offsetX;
-        const cy = window.innerHeight / 2 + gameState.canvas.offsetY;
+        const mx = (centerX - rect.left) * (vw() / rect.width);
+        const my = (centerY - rect.top) * (vh() / rect.height);
+        const cx = vw() / 2 + gameState.canvas.offsetX;
+        const cy = vh() / 2 + gameState.canvas.offsetY;
         gameState.canvas.offsetX += (mx - cx) * (1 - delta);
         gameState.canvas.offsetY += (my - cy) * (1 - delta);
         gameState.canvas.scale = newScale;
@@ -1504,8 +1515,8 @@ function handleMouseMove(e) {
 
 // 像素坐标转换为网格坐标
 function pixelToGrid(pixelX, pixelY) {
-  const centerX = window.innerWidth / 2 + gameState.canvas.offsetX;
-  const centerY = window.innerHeight / 2 + gameState.canvas.offsetY;
+  const centerX = vw() / 2 + gameState.canvas.offsetX;
+  const centerY = vh() / 2 + gameState.canvas.offsetY;
   const scale = gameState.canvas.scale;
 
   const gridX = Math.floor((pixelX - centerX) / (CELL_SIZE * scale));
@@ -1543,7 +1554,12 @@ function calculateInputCellPositions() {
 
     const key = `${x},${y}`;
     const existing = gameState.cells.get(key);
+    const isAnchor = (x === draft.anchorX && y === draft.anchorY);
 
+    // 所有已有字都锁定预填（不可覆盖，硬约束）：
+    //   - 锚点匹配 = 连接点（hasOverlap）
+    //   - 其他已有字匹配 = 额外连接点（如"有雪共清酒"中的"酒"）
+    //   - 其他已有字不在新句范围内（截断）= 提示冲突，换路径
     draft.inputCells.push({
       x, y,
       char: existing ? existing.char : '',
@@ -1617,8 +1633,8 @@ function updateFloatingInputPosition() {
   const draft = gameState.draft;
   const currentCell = draft.inputCells[draft.currentInputIndex];
 
-  const centerX = window.innerWidth / 2 + gameState.canvas.offsetX;
-  const centerY = window.innerHeight / 2 + gameState.canvas.offsetY;
+  const centerX = vw() / 2 + gameState.canvas.offsetX;
+  const centerY = vh() / 2 + gameState.canvas.offsetY;
   const scale = gameState.canvas.scale;
 
   const pixelX = centerX + currentCell.x * CELL_SIZE * scale;
@@ -2022,8 +2038,8 @@ function handleWheelZoom(e) {
   if (newScale < 0.3 || newScale > 3) return;
 
   // 计算鼠标在画布上的相对位置
-  const centerX = window.innerWidth / 2 + gameState.canvas.offsetX;
-  const centerY = window.innerHeight / 2 + gameState.canvas.offsetY;
+  const centerX = vw() / 2 + gameState.canvas.offsetX;
+  const centerY = vh() / 2 + gameState.canvas.offsetY;
 
   // 计算鼠标相对于画布中心的偏移
   const mouseOffsetX = mouseX - centerX;
