@@ -29,7 +29,7 @@ body {
   background: white;
   border: 1px solid #ccc;
   border-radius: 8px;
-  padding: 15px;
+  padding: 0;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   z-index: 100;
   min-width: 200px;
@@ -37,6 +37,31 @@ body {
   max-height: calc(100vh - 40px);
   max-height: calc(100dvh - 40px);
   overflow-y: auto;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 15px 0 15px;
+  margin-bottom: 10px;
+}
+
+.panel-content {
+  padding: 0 15px 15px 15px;
+  transition: max-height 0.3s ease, opacity 0.3s ease;
+  overflow: hidden;
+}
+
+.panel.collapsed .panel-content {
+  max-height: 0;
+  opacity: 0;
+  padding-bottom: 0;
+}
+
+.panel:not(.collapsed) .panel-content {
+  max-height: 500px;
+  opacity: 1;
 }
 
 .panel h1 {
@@ -147,6 +172,29 @@ body {
 .btn.primary:disabled {
   background: #cccccc;
   border-color: #cccccc;
+}
+
+/* 折叠按钮样式 */
+.collapse-btn {
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: "Noto Serif SC", "SimSun", serif;
+  transition: all 0.2s;
+  min-width: 40px;
+  text-align: center;
+}
+
+.collapse-btn:hover {
+  background: #f0f0f0;
+  border-color: #999;
+}
+
+.panel.collapsed .collapse-btn {
+  background: #f8f8f8;
 }
 
 /* 覆盖层 (Overlay) */
@@ -344,6 +392,20 @@ body {
   #poem-list-panel h2 {
     font-size: 12px !important;
     margin-bottom: 6px !important;
+  }
+
+  .panel-header {
+    padding: 10px 12px 0 12px;
+  }
+
+  .panel-content {
+    padding: 0 12px 12px 12px;
+  }
+
+  .collapse-btn {
+    padding: 3px 6px;
+    font-size: 11px;
+    min-width: 36px;
   }
 
   .draft-bar {

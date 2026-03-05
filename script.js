@@ -1192,7 +1192,19 @@ function drawInputCells(ctx) {
   const scale = gameState.canvas.scale;
   const cellSize = CELL_SIZE * scale;
 
+  // 找最后一个用户编辑格，之后的格不渲染
+  let lastEdited = -1;
+  for (let i = draft.inputCells.length - 1; i >= 0; i--) {
+    if (draft.inputCells[i].userEdited) { lastEdited = i; break; }
+  }
+  // 渲染范围：到 lastEdited 之后再多显示若干空格（供继续输入），但预填格只在 lastEdited 之前显示
+  const renderLimit = Math.max(draft.currentInputIndex, lastEdited) + 1;
+
   draft.inputCells.forEach((cell, index) => {
+    // 超过渲染范围且是预填格，跳过（避免显示多余的已有字）
+    if (index >= renderLimit && cell.prefilled && !cell.userEdited) return;
+    // 超过当前光标+1的空格也不渲染
+    if (index > draft.currentInputIndex && !cell.userEdited && !cell.prefilled) return;
     const pixelX = centerX + cell.x * cellSize;
     const pixelY = centerY + cell.y * cellSize;
 
@@ -1201,22 +1213,25 @@ function drawInputCells(ctx) {
 
     let bgColor, borderColor, borderStyle;
 
-    if (cell.locked) {
-      // 锚字：绿色锁定
-      bgColor = '#c8e6c9';
-      borderColor = '#4CAF50';
+    if (existingCell && cell.char) {
+      // 交叉处：用户已输入，检测是否与已有字一致
+      const match = existingCell.char === cell.char;
+      bgColor = match ? '#c8e6c9' : '#ffcdd2';
+      borderColor = match ? '#4CAF50' : '#f44336';
       borderStyle = 'solid';
-    } else if (existingCell && cell.char) {
-      bgColor = existingCell.char === cell.char ? '#c8e6c9' : '#ffcdd2';
-      borderColor = existingCell.char === cell.char ? '#4CAF50' : '#f44336';
-      borderStyle = 'solid';
+    } else if (existingCell && !cell.char) {
+      // 交叉处：用户尚未输入（预填被清空）
+      bgColor = '#fff3e0';
+      borderColor = '#ff9800';
+      borderStyle = 'dashed';
     } else {
+      // 普通空格
       bgColor = '#fff9c4';
       borderColor = '#ffeb3b';
       borderStyle = 'dashed';
     }
 
-    const isActive = index === draft.currentInputIndex && !cell.locked;
+    const isActive = index === draft.currentInputIndex;
     if (isActive) {
       ctx.shadowColor = 'rgba(76, 175, 80, 0.5)';
       ctx.shadowBlur = 10 * scale;
@@ -1234,7 +1249,9 @@ function drawInputCells(ctx) {
     ctx.setLineDash([]);
 
     if (cell.char) {
-      ctx.fillStyle = cell.locked ? '#555' : '#333';
+      // 交叉冲突时文字也用红色
+      const existConflict = existingCell && cell.char && existingCell.char !== cell.char;
+      ctx.fillStyle = existConflict ? '#c62828' : '#333';
       ctx.font = `${24 * scale}px "Noto Serif SC", "SimSun", serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -1554,22 +1571,19 @@ function calculateInputCellPositions() {
 
     const key = `${x},${y}`;
     const existing = gameState.cells.get(key);
-    const isAnchor = (x === draft.anchorX && y === draft.anchorY);
 
-    // 所有已有字都锁定预填（不可覆盖，硬约束）：
-    //   - 锚点匹配 = 连接点（hasOverlap）
-    //   - 其他已有字匹配 = 额外连接点（如"有雪共清酒"中的"酒"）
-    //   - 其他已有字不在新句范围内（截断）= 提示冲突，换路径
+    // 已有字预填但不锁定，用户可自由修改，输错会红色提示
     draft.inputCells.push({
       x, y,
       char: existing ? existing.char : '',
-      locked: !!existing,
+      prefilled: !!existing,
+      userEdited: false,
       index: i
     });
   }
 
-  draft.currentInputIndex = draft.inputCells.findIndex(c => !c.locked);
-  if (draft.currentInputIndex === -1) draft.currentInputIndex = 0;
+  // 从第一格开始输入（包括预填格也可编辑）
+  draft.currentInputIndex = 0;
 
   draft.stepX = stepX;
   draft.stepY = stepY;
@@ -1610,6 +1624,7 @@ function createFloatingInput() {
   });
   floatingInput.addEventListener('compositionend', (e) => {
     gameState.isComposing = false;
+    gameState.justFinishedComposing = true;
     handleFloatingInput(e);
   });
 
@@ -1651,35 +1666,45 @@ function updateFloatingInputPosition() {
   floatingInput.style.height = `${cellH}px`;
   floatingInput.style.fontSize = `${24 * scale}px`;
 
-  floatingInput.value = currentCell.char || '';
+  floatingInput.value = ''; // 始终清空，避免旧字干扰下次输入
 }
 
 // 处理浮动输入框输入
 function handleFloatingInput(e) {
   if (gameState.isComposing) return;
 
+  // compositionend 之后浏览器会再触发一次 input，此时 value 已被清空，跳过
+  if (gameState.justFinishedComposing && e.type === 'input') {
+    gameState.justFinishedComposing = false;
+    return;
+  }
+  gameState.justFinishedComposing = false;
+
   const draft = gameState.draft;
   if (!draft) return;
 
   const value = e.target.value;
-  const currentCell = draft.inputCells[draft.currentInputIndex];
-  if (!currentCell || currentCell.locked) return;
+  if (!value) return;
 
-  const char = value.slice(-1);
-  if (char) {
-    currentCell.char = char;
-    updateDraftTextFromCells();
-
-    // 移动到下一个非锁定格
-    let next = draft.currentInputIndex + 1;
-    while (next < draft.inputCells.length && draft.inputCells[next].locked) next++;
-    if (next < draft.inputCells.length) {
-      draft.currentInputIndex = next;
-    }
-    updateFloatingInputPosition();
-    validateDraft();
-    drawCanvas();
+  // 逐字填入：从当前格开始，每个字符依次填一格
+  let idx = draft.currentInputIndex;
+  for (const char of value) {
+    if (idx >= draft.inputCells.length) break;
+    draft.inputCells[idx].char = char;
+    draft.inputCells[idx].userEdited = true;
+    idx++;
   }
+
+  // 光标移到下一个待输入格，不超出边界
+  draft.currentInputIndex = Math.min(idx, draft.inputCells.length - 1);
+
+  // 清空输入框，准备接收下一次输入（合成已结束才清空）
+  e.target.value = '';
+
+  updateDraftTextFromCells();
+  updateFloatingInputPosition();
+  validateDraft();
+  drawCanvas();
 }
 
 // 处理浮动输入框键盘事件
@@ -1692,7 +1717,6 @@ function handleFloatingInputKeyDown(e) {
     case 'ArrowUp': {
       e.preventDefault();
       let prev = draft.currentInputIndex - 1;
-      while (prev >= 0 && draft.inputCells[prev].locked) prev--;
       if (prev >= 0) {
         draft.currentInputIndex = prev;
         updateFloatingInputPosition();
@@ -1704,7 +1728,6 @@ function handleFloatingInputKeyDown(e) {
     case 'ArrowDown': {
       e.preventDefault();
       let next = draft.currentInputIndex + 1;
-      while (next < draft.inputCells.length && draft.inputCells[next].locked) next++;
       if (next < draft.inputCells.length) {
         draft.currentInputIndex = next;
         updateFloatingInputPosition();
@@ -1715,15 +1738,17 @@ function handleFloatingInputKeyDown(e) {
     case 'Backspace': {
       e.preventDefault();
       const currentCell = draft.inputCells[draft.currentInputIndex];
-      if (!currentCell.locked && currentCell.char) {
+      if (currentCell.char) {
+        // 当前格有字，清空（预填字也可清空）
         currentCell.char = '';
+        currentCell.userEdited = false;
       } else {
-        // 退回到上一个非锁定格并清空
+        // 当前格已空，退到上一格并清空
         let prev = draft.currentInputIndex - 1;
-        while (prev >= 0 && draft.inputCells[prev].locked) prev--;
         if (prev >= 0) {
           draft.currentInputIndex = prev;
           draft.inputCells[prev].char = '';
+          draft.inputCells[prev].userEdited = false;
         }
       }
       updateDraftTextFromCells();
@@ -1746,13 +1771,14 @@ function updateDraftTextFromCells() {
   const draft = gameState.draft;
   if (!draft) return;
 
-  // 找最后一个有字的格
-  let lastFilled = -1;
+  // 以最后一个用户主动编辑的格为截断点
+  let lastEdited = -1;
   for (let i = draft.inputCells.length - 1; i >= 0; i--) {
-    if (draft.inputCells[i].char) { lastFilled = i; break; }
+    if (draft.inputCells[i].userEdited) { lastEdited = i; break; }
   }
+  if (lastEdited < 0) { draft.text = ''; return; }
 
-  draft.text = draft.inputCells.slice(0, lastFilled + 1).map(c => c.char).join('');
+  draft.text = draft.inputCells.slice(0, lastEdited + 1).map(c => c.char).join('');
 }
 
 // 退出草稿模式
@@ -1784,14 +1810,14 @@ function validateDraft() {
     return;
   }
 
-  // 找到最后一个有字的格作为截断
-  let lastFilled = -1;
+  // 以最后一个用户主动编辑的格为截断点
+  let lastEdited = -1;
   for (let i = draft.inputCells.length - 1; i >= 0; i--) {
-    if (draft.inputCells[i].char) { lastFilled = i; break; }
+    if (draft.inputCells[i].userEdited) { lastEdited = i; break; }
   }
-  if (lastFilled < 0) { confirmBtn.disabled = true; setDraftHint('在格子中逐字输入，与已有字重合即可接龙'); return; }
+  if (lastEdited < 0) { confirmBtn.disabled = true; setDraftHint('在格子中逐字输入，与已有字重合即可接龙'); return; }
 
-  const usedCells = draft.inputCells.slice(0, lastFilled + 1);
+  const usedCells = draft.inputCells.slice(0, lastEdited + 1);
 
   let hasOverlap = false;
   let hasConflict = false;
@@ -1839,14 +1865,14 @@ function confirmDraft() {
 
   const draft = gameState.draft;
 
-  // 找到最后一个有字的格
-  let lastFilled = -1;
+  // 以最后一个用户主动编辑的格为截断点
+  let lastEdited = -1;
   for (let i = draft.inputCells.length - 1; i >= 0; i--) {
-    if (draft.inputCells[i].char) { lastFilled = i; break; }
+    if (draft.inputCells[i].userEdited) { lastEdited = i; break; }
   }
-  if (lastFilled < 0) return;
+  if (lastEdited < 0) return;
 
-  const usedCells = draft.inputCells.slice(0, lastFilled + 1);
+  const usedCells = draft.inputCells.slice(0, lastEdited + 1);
   const text = usedCells.map(c => c.char).join('');
 
   const newPoem = {
@@ -2302,4 +2328,86 @@ window.addEventListener('DOMContentLoaded', () => {
   
   // 显示开始界面
   showStartOverlay();
+
+  // 面板折叠功能初始化
+  initializePanelCollapse();
 });
+
+// 面板折叠状态管理
+function initializePanelCollapse() {
+  // 恢复面板状态
+  restorePanelStates();
+
+  // 为所有折叠按钮添加事件监听
+  document.querySelectorAll('.collapse-btn').forEach(button => {
+    button.addEventListener('click', function() {
+      const panelType = this.getAttribute('data-panel');
+      togglePanel(panelType);
+    });
+  });
+}
+
+// 切换面板折叠状态
+function togglePanel(panelType) {
+  const panelId = panelType === 'export' ? 'left-panel' : 'poem-list-panel';
+  const panel = document.getElementById(panelId);
+  const button = document.querySelector(`.collapse-btn[data-panel="${panelType}"]`);
+
+  if (!panel || !button) return;
+
+  const isCollapsed = panel.classList.toggle('collapsed');
+
+  // 更新按钮文本
+  button.textContent = isCollapsed ? '展开' : '折叠';
+  button.title = isCollapsed ? '展开' : '折叠';
+
+  // 保存状态到 localStorage
+  savePanelState(panelType, isCollapsed);
+}
+
+// 保存面板状态到 localStorage
+function savePanelState(panelType, isCollapsed) {
+  const key = `panel.${panelType}.collapsed`;
+  try {
+    localStorage.setItem(key, isCollapsed.toString());
+  } catch (error) {
+    console.warn('无法保存面板状态到 localStorage:', error);
+  }
+}
+
+// 从 localStorage 恢复面板状态
+function restorePanelStates() {
+  const panelConfigs = [
+    { type: 'export', panelId: 'left-panel' },
+    { type: 'poemlist', panelId: 'poem-list-panel' }
+  ];
+
+  panelConfigs.forEach(({ type, panelId }) => {
+    const panel = document.getElementById(panelId);
+    const button = document.querySelector(`.collapse-btn[data-panel="${type}"]`);
+
+    if (!panel || !button) return;
+
+    try {
+      const key = `panel.${type}.collapsed`;
+      const savedState = localStorage.getItem(key);
+
+      if (savedState === 'true') {
+        panel.classList.add('collapsed');
+        button.textContent = '展开';
+        button.title = '展开';
+      } else {
+        // 默认展开状态
+        panel.classList.remove('collapsed');
+        button.textContent = '折叠';
+        button.title = '折叠';
+      }
+    } catch (error) {
+      console.warn('无法从 localStorage 读取面板状态:', error);
+      // 默认展开状态
+      panel.classList.remove('collapsed');
+      button.textContent = '折叠';
+      button.title = '折叠';
+    }
+  });
+}

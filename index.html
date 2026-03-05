@@ -12,24 +12,34 @@
     <div id="game-container" class="hidden">
         <!-- Left control panel -->
         <div id="left-panel" class="panel">
-            <h1>诗词接龙</h1>
-            <div class="status-label" id="status-label">点击已有字，选起点，接龙</div>
-            <div class="stats">
-                <div>回合: <span id="turn-count">1</span></div>
-                <div>诗句: <span id="poem-count">1</span></div>
+            <div class="panel-header">
+                <h1>诗词接龙</h1>
+                <button class="collapse-btn" data-panel="export" title="折叠">折叠</button>
             </div>
-            <button id="undo-btn" class="btn" style="margin-top:10px;width:100%;" disabled>撤销</button>
-            <button id="redo-btn" class="btn" style="margin-top:6px;width:100%;" disabled>重做</button>
-            <hr style="margin:12px 0;border:none;border-top:1px solid #eee;">
-            <button id="export-btn" class="btn" style="width:100%;">导出存档</button>
-            <button id="import-btn" class="btn" style="margin-top:6px;width:100%;">导入存档</button>
-            <input type="file" id="import-file" accept=".json" style="display:none;">
+            <div class="panel-content">
+                <div class="status-label" id="status-label">点击已有字，选起点，接龙</div>
+                <div class="stats">
+                    <div>回合: <span id="turn-count">1</span></div>
+                    <div>诗句: <span id="poem-count">1</span></div>
+                </div>
+                <button id="undo-btn" class="btn" style="margin-top:10px;width:100%;" disabled>撤销</button>
+                <button id="redo-btn" class="btn" style="margin-top:6px;width:100%;" disabled>重做</button>
+                <hr style="margin:12px 0;border:none;border-top:1px solid #eee;">
+                <button id="export-btn" class="btn" style="width:100%;">导出存档</button>
+                <button id="import-btn" class="btn" style="margin-top:6px;width:100%;">导入存档</button>
+                <input type="file" id="import-file" accept=".json" style="display:none;">
+            </div>
         </div>
 
         <!-- Poem list panel (right side) -->
         <div id="poem-list-panel" class="panel" style="top:20px;left:auto;right:20px;min-width:180px;max-width:220px;max-height:calc(100dvh - 40px);overflow-y:auto;">
-            <h2 style="font-size:15px;margin-bottom:10px;color:#333;font-weight:500;">已录诗句</h2>
-            <div id="poem-list"></div>
+            <div class="panel-header">
+                <h2 style="font-size:15px;margin-bottom:10px;color:#333;font-weight:500;">已录诗句</h2>
+                <button class="collapse-btn" data-panel="poemlist" title="折叠">折叠</button>
+            </div>
+            <div class="panel-content">
+                <div id="poem-list"></div>
+            </div>
         </div>
 
         <!-- Canvas container -->
