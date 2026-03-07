@@ -1281,6 +1281,7 @@ function setupEventListeners() {
 let touchStartX = 0, touchStartY = 0;
 let touchStartTime = 0;
 let lastTouchDist = 0; // 双指缩放
+let touchHasMoved = false;
 
 function getTouchPos(touch) {
   const rect = gameCanvas.getBoundingClientRect();
@@ -1299,7 +1300,6 @@ function handleTouchStart(e) {
   e.preventDefault();
 
   if (e.touches.length === 2) {
-    // 双指缩放开始
     const dx = e.touches[0].clientX - e.touches[1].clientX;
     const dy = e.touches[0].clientY - e.touches[1].clientY;
     lastTouchDist = Math.sqrt(dx * dx + dy * dy);
@@ -1313,7 +1313,8 @@ function handleTouchStart(e) {
   touchStartTime = Date.now();
   lastMouseX = pos.clientX;
   lastMouseY = pos.clientY;
-  isDragging = true;
+  isDragging = false;   // 不立即开启拖拽，等 touchmove 超过阈值再开
+  touchHasMoved = false;
 }
 
 function handleTouchMove(e) {
@@ -1347,8 +1348,18 @@ function handleTouchMove(e) {
     return;
   }
 
-  if (!isDragging) return;
   const t = e.touches[0];
+  const moveDist = Math.sqrt(
+    Math.pow(t.clientX - touchStartX, 2) + Math.pow(t.clientY - touchStartY, 2)
+  );
+  // 超过 12px 才算拖拽
+  if (!isDragging && moveDist > 12) {
+    isDragging = true;
+    touchHasMoved = true;
+    lastMouseX = t.clientX;
+    lastMouseY = t.clientY;
+  }
+  if (!isDragging) return;
   const deltaX = t.clientX - lastMouseX;
   const deltaY = t.clientY - lastMouseY;
   gameState.canvas.offsetX += deltaX;
@@ -1372,11 +1383,11 @@ function handleTouchEnd(e) {
 
   isDragging = false;
 
-  // 判定为点击：移动距离小、时间短
-  if (dist < 10 && duration < 300) {
-    const pos = getTouchPos(t);
+  // 判定为点击：未触发拖拽、时间合理
+  if (!touchHasMoved && duration < 500) {
     handleCanvasClick({ clientX: t.clientX, clientY: t.clientY });
   }
+  touchHasMoved = false;
 }
 
 // 处理画布点击
@@ -2330,7 +2341,7 @@ window.addEventListener('DOMContentLoaded', () => {
 // ---- Supabase 配置 ----
 // 请将下方替换为你重新生成后的 anon key
 const SUPABASE_URL = 'https://ueakewogxnsyfiuugysx.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_sD1VgqV1O7FrlGimxlQfqQ_j2fuUTzj';
+const SUPABASE_KEY = '在此填入你的新anon_key';
 let _supabase = null;
 function getSupabase() {
   if (!_supabase && window.supabase) {
@@ -2435,6 +2446,33 @@ async function joinRoom(roomCode, nickname) {
 }
 
 // ---- 订阅房间变化 ----
+
+// ---- 进入联机游戏（房主和非房主共用）----
+function enterOnlineGame() {
+  document.getElementById('game-container')?.classList.remove('hidden');
+  document.getElementById('multiplayer-bar')?.classList.remove('hidden');
+  document.getElementById('online-lobby-overlay')?.classList.add('hidden');
+  document.getElementById('join-room-overlay')?.classList.add('hidden');
+  document.getElementById('input-origin-overlay')?.classList.add('hidden');
+
+  // 初始化画布（首次或尺寸为0时）
+  const needsInit = !gameCanvas.width || gameCanvas.width === 0;
+  initCanvas();
+  setupEventListeners();
+
+  gameState.currentTurn = gameState.poems.length;
+  gameState.history = [];
+  gameState.redoStack = [];
+  gameState.draftMode = false;
+  gameState.draft = null;
+  gameState.selectedCell = null;
+  gameState.directionPicker = null;
+
+  updateUI();
+  drawCanvas();
+  updateMultiplayerBar();
+}
+
 function subscribeToRoom(roomId) {
   const sb = getSupabase();
   if (mpState.subscription) mpState.subscription.unsubscribe();
@@ -2464,12 +2502,9 @@ function subscribeToRoom(roomId) {
     const lobbyEl = document.getElementById('online-lobby-overlay');
     if (room.status === 'playing' && lobbyEl && !lobbyEl.classList.contains('hidden')) {
       lobbyEl.classList.add('hidden');
-      document.getElementById('game-container')?.classList.remove('hidden');
-      document.getElementById('multiplayer-bar')?.classList.remove('hidden');
-      handleRoomUpdate(room);
-      if (gameCanvas.width === 0) initCanvas();
-      setupEventListeners();
-      updateMultiplayerBar();
+      rebuildStateFromPoems(room.game_state.poems || []);
+      mpState.currentTurnPlayerId = room.current_turn;
+      enterOnlineGame();
       stopLobbyPoll();
     }
   }, 3000);
@@ -2852,14 +2887,13 @@ document.addEventListener('DOMContentLoaded', () => {
     newBeginBtn.addEventListener('click', async () => {
       const poemText = document.getElementById('initial-poem-input')?.value.trim();
       if (!poemText || poemText.length < 2) { showInitError('请输入起始诗句（至少2字）'); return; }
-      INITIAL_POEM.text = poemText;
-      mpState.enabled = true;
       inputOverlay?.classList.add('hidden');
-      document.getElementById('game-container')?.classList.remove('hidden');
-      document.getElementById('multiplayer-bar')?.classList.remove('hidden');
+      mpState.enabled = true;
+      // 先推到 Supabase，再本地建状态进入游戏
       await startOnlineGame(poemText);
-      initGame();
-      updateMultiplayerBar();
+      rebuildStateFromPoems([{ text: poemText, x: 0, y: 0, direction: 'H',
+        playerId: mpState.playerId, color: mpState.color }]);
+      enterOnlineGame();
     });
     // Enter 键也绑一下
     document.getElementById('initial-poem-input')?.addEventListener('keydown', function onEnter(e) {
@@ -2889,41 +2923,22 @@ document.addEventListener('DOMContentLoaded', () => {
       if (room.status === 'playing') {
         // 游戏已开始，直接进入
         document.getElementById('join-room-overlay')?.classList.add('hidden');
-        document.getElementById('game-container')?.classList.remove('hidden');
-        document.getElementById('multiplayer-bar')?.classList.remove('hidden');
         rebuildStateFromPoems(room.game_state.poems || []);
         mpState.currentTurnPlayerId = room.current_turn;
-        initCanvas();
-        setupEventListeners();
-        updateUI();
-        drawCanvas();
-        updateMultiplayerBar();
+        enterOnlineGame();
       } else {
-        // 等待房主开始
+        // 等待房主开始——显示等待提示
         document.getElementById('join-room-overlay')?.classList.add('hidden');
         document.getElementById('online-lobby-overlay')?.classList.remove('hidden');
         document.getElementById('lobby-create-section')?.classList.add('hidden');
         document.getElementById('lobby-waiting-section')?.classList.remove('hidden');
         document.getElementById('room-code-display').textContent = code.toUpperCase();
         document.getElementById('start-online-game-btn').style.display = 'none';
+        // 显示"等待房主输入起始诗句"的提示，隐藏"分享房间码"
+        document.getElementById('lobby-wait-hint')?.classList.remove('hidden');
+        document.getElementById('lobby-wait-hint-host')?.classList.add('hidden');
         updateLobbyPlayersList();
-        // 等待 handleRoomUpdate 推入游戏
-        const origHandle = handleRoomUpdate;
-        // 一次性监听游戏开始
-        const _unsub = getSupabase().channel('room-start:' + mpState.roomId)
-          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${mpState.roomId}` },
-            (payload) => {
-              if (payload.new.status === 'playing') {
-                document.getElementById('online-lobby-overlay')?.classList.add('hidden');
-                document.getElementById('game-container')?.classList.remove('hidden');
-                document.getElementById('multiplayer-bar')?.classList.remove('hidden');
-                handleRoomUpdate(payload.new);
-                initCanvas();
-                setupEventListeners();
-                updateMultiplayerBar();
-                _unsub.unsubscribe();
-              }
-            }).subscribe();
+        // 轮询已在 subscribeToRoom 里处理，游戏开始后会自动 enterOnlineGame
       }
     } catch (err) {
       if (errEl) { errEl.textContent = err.message; errEl.classList.remove('hidden'); }
