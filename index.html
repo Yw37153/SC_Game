@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>诗词接龙游戏</title>
@@ -22,19 +22,20 @@
                     <div>回合: <span id="turn-count">1</span></div>
                     <div>诗句: <span id="poem-count">1</span></div>
                 </div>
-                <button id="undo-btn" class="btn" style="margin-top:10px;width:100%;" disabled>撤销</button>
-                <button id="redo-btn" class="btn" style="margin-top:6px;width:100%;" disabled>重做</button>
-                <hr style="margin:12px 0;border:none;border-top:1px solid #eee;">
-                <button id="export-btn" class="btn" style="width:100%;">导出存档</button>
-                <button id="import-btn" class="btn" style="margin-top:6px;width:100%;">导入存档</button>
-                <input type="file" id="import-file" accept=".json" style="display:none;">
+                <button id="undo-btn" class="btn full-width" disabled>撤销</button>
+                <button id="redo-btn" class="btn full-width margin-small" disabled>重做</button>
+                <hr class="panel-divider">
+                <button id="export-btn" class="btn full-width">导出存档</button>
+                <button id="import-btn" class="btn full-width margin-small">导入存档</button>
+                <button id="end-game-btn" class="btn full-width margin-small danger">结束游戏</button>
+                <input type="file" id="import-file" accept=".json" class="hidden-input" title="导入存档">
             </div>
         </div>
 
         <!-- Poem list panel (right side) -->
-        <div id="poem-list-panel" class="panel" style="top:20px;left:auto;right:20px;min-width:180px;max-width:220px;max-height:calc(100dvh - 40px);overflow-y:auto;">
+        <div id="poem-list-panel" class="panel">
             <div class="panel-header">
-                <h2 style="font-size:15px;margin-bottom:10px;color:#333;font-weight:500;">已录诗句</h2>
+                <h2>已录诗句</h2>
                 <button class="collapse-btn" data-panel="poemlist" title="折叠">折叠</button>
             </div>
             <div class="panel-content">
@@ -50,24 +51,35 @@
         <!-- Bottom draft operation bar -->
         <div id="draft-bar" class="draft-bar hidden">
             <button id="cancel-btn" class="btn">取消</button>
-            <span id="draft-hint" style="font-size:13px;color:#888;font-family:'Noto Serif SC',serif;">在格子中逐字输入，与已有字重合即可接龙</span>
+            <span id="draft-hint">在格子中逐字输入，与已有字重合即可接龙</span>
             <button id="confirm-btn" class="btn primary" disabled>确认</button>
         </div>
     </div>
 
-    <!-- 欢迎界面 - 标题 -->
+    <!-- 欢迎界面 - 两个入口 -->
     <div id="start-game-overlay" class="overlay">
         <div class="overlay-content">
             <h1 class="game-title">诗词接龙</h1>
             <p class="game-subtitle">在诗词的世界里穿行，连接文字的美好</p>
-            <p class="click-hint">点击任意处继续</p>
+            <div class="mode-buttons">
+                <button id="solo-mode-btn" class="mode-btn">
+                    <span class="mode-icon">📖</span>
+                    <span class="mode-name">单人游戏</span>
+                    <span class="mode-desc">独自在诗词中漫游</span>
+                </button>
+                <button id="online-mode-btn" class="mode-btn">
+                    <span class="mode-icon">🎋</span>
+                    <span class="mode-name">联机对弈</span>
+                    <span class="mode-desc">与好友轮流接龙</span>
+                </button>
+            </div>
         </div>
     </div>
 
     <!-- 输入起始诗句界面 -->
     <div id="input-origin-overlay" class="overlay hidden">
         <div class="overlay-content">
-            <h2 style="font-weight: 300; letter-spacing: 2px;">从哪开始</h2>
+            <h2>从哪开始</h2>
             <p class="input-hint">输入一句诗词开始游戏</p>
             <div id="initInput">
                 <input type="text" id="initial-poem-input" placeholder="春眠不觉晓" maxlength="20">
@@ -80,6 +92,112 @@
         </div>
     </div>
 
+    <!-- 游戏结束/结算对话框 -->
+    <div id="game-over-overlay" class="overlay hidden">
+        <div class="overlay-content">
+            <h2>游戏结算</h2>
+            <p class="input-hint">本局游戏已结束</p>
+            <div id="game-over-info">
+                <div><span>总回合：</span><span id="game-over-turn">--</span></div>
+                <div><span>总诗句：</span><span id="game-over-poem-count">--</span></div>
+            </div>
+            <div class="input-actions">
+                <button id="game-over-new-btn" class="btn">新游戏</button>
+                <button id="game-over-continue-btn" class="btn primary">继续当前棋盘</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 恢复游戏对话框 -->
+    <div id="restore-game-overlay" class="overlay hidden">
+        <div class="overlay-content">
+            <h2>继续游戏</h2>
+            <p class="input-hint">检测到未完成的游戏</p>
+            <div id="restore-info">
+                <div><span>存档时间：</span><span id="restore-timestamp">--</span></div>
+                <div><span>当前回合：</span><span id="restore-turn">--</span></div>
+                <div><span>已录诗句：</span><span id="restore-poem-count">--</span></div>
+            </div>
+            <div class="input-actions">
+                <button id="restore-new-game-btn" class="btn">新游戏</button>
+                <button id="restore-continue-btn" class="btn primary">继续游戏</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 联机：创建/等待房间 -->
+    <div id="online-lobby-overlay" class="overlay hidden">
+        <div class="overlay-content">
+            <h2>联机对弈</h2>
+
+            <!-- 创建区 -->
+            <div id="lobby-create-section">
+                <p class="input-hint">创建房间，分享房间码给好友</p>
+                <div id="lobbyInput">
+                    <input type="text" id="nickname-input" placeholder="你的昵称" maxlength="10">
+                    <div id="lobby-error" class="error-message hidden"></div>
+                </div>
+                <div class="input-actions">
+                    <button id="lobby-back-btn" class="btn">返回</button>
+                    <button id="create-room-btn" class="btn primary">创建房间</button>
+                </div>
+                <p class="join-link" id="show-join-btn">有房间码？点此加入</p>
+            </div>
+
+            <!-- 等待区（创建成功后显示） -->
+            <div id="lobby-waiting-section" class="hidden">
+                <p class="input-hint">分享房间码给好友</p>
+                <div class="room-code-box">
+                    <div class="room-code" id="room-code-display">------</div>
+                    <button id="copy-room-code-btn" class="btn">复制</button>
+                </div>
+                <div id="lobby-players-list"></div>
+                <div class="input-actions">
+                    <button id="leave-room-btn" class="btn">离开</button>
+                    <button id="start-online-game-btn" class="btn primary" disabled>开始游戏</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 联机：加入房间 -->
+    <div id="join-room-overlay" class="overlay hidden">
+        <div class="overlay-content">
+            <h2>加入房间</h2>
+            <p class="input-hint">输入好友的房间码</p>
+            <div id="joinInput">
+                <input type="text" id="join-nickname-input" placeholder="你的昵称" maxlength="10">
+                <input type="text" id="join-room-code-input" placeholder="房间码（6位）" maxlength="6" class="room-code-input">
+                <div id="join-error" class="error-message hidden"></div>
+            </div>
+            <div class="input-actions">
+                <button id="join-back-btn" class="btn">返回</button>
+                <button id="join-room-btn" class="btn primary">加入</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 联机底部控制栏 -->
+    <div id="multiplayer-bar" class="multiplayer-bar hidden">
+        <div class="mp-players" id="mp-players-list"></div>
+        <div class="mp-turn-info" id="mp-turn-info">等待玩家加入...</div>
+        <div class="mp-actions">
+            <div class="mp-color-picker">
+                <span class="mp-color-label">颜色</span>
+                <div class="mp-colors">
+                    <button class="color-swatch" data-color="#222222" style="background:#222222;" title="墨黑"></button>
+                    <button class="color-swatch" data-color="#436C85" style="background:#436C85;" title="石青"></button>
+                    <button class="color-swatch" data-color="#B73F42" style="background:#B73F42;" title="朱砂"></button>
+                    <button class="color-swatch" data-color="#DE9960" style="background:#DE9960;" title="赭石"></button>
+                    <button class="color-swatch" data-color="#82B29B" style="background:#82B29B;" title="青绿"></button>
+                </div>
+            </div>
+            <button id="mp-skip-btn" class="btn mp-btn" disabled>跳过</button>
+        </div>
+    </div>
+
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="script.js"></script>
 </body>
 </html>
