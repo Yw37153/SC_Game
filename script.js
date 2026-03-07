@@ -2498,14 +2498,17 @@ function subscribeToRoom(roomId) {
   mpState._pollInterval = setInterval(async () => {
     await refreshPlayers();
     if (!mpState.roomId) return;
-    const { data: room } = await sb.from('rooms').select('*').eq('id', mpState.roomId).single();
-    if (!room) return;
+    const { data: rooms, error } = await sb.from('rooms').select('*').eq('id', mpState.roomId);
+    if (error || !rooms || rooms.length === 0) return;
+    const room = rooms[0];
+
+    // 同步游戏状态（诗句和回合）
+    handleRoomUpdate(room);
+
     // 如果游戏已开始但玩家还卡在大厅，主动推入游戏
     const lobbyEl = document.getElementById('online-lobby-overlay');
     if (room.status === 'playing' && lobbyEl && !lobbyEl.classList.contains('hidden')) {
       lobbyEl.classList.add('hidden');
-      rebuildStateFromPoems(room.game_state.poems || []);
-      mpState.currentTurnPlayerId = room.current_turn;
       enterOnlineGame();
       stopLobbyPoll();
     }
@@ -2523,12 +2526,16 @@ function stopLobbyPoll() {
 function handleRoomUpdate(roomData) {
   if (!roomData) return;
   const gs = roomData.game_state;
-  if (gs && gs.poems && gs.poems.length !== gameState.poems.length) {
+  // 同步诗句：长度不同或本地没有时重建
+  if (gs && gs.poems && (!gameState.poems || gs.poems.length !== gameState.poems.length)) {
     rebuildStateFromPoems(gs.poems);
     updateUI();
     drawCanvas();
   }
-  mpState.currentTurnPlayerId = roomData.current_turn;
+  // 同步当前回合玩家
+  if (roomData.current_turn) {
+    mpState.currentTurnPlayerId = roomData.current_turn;
+  }
   updateMultiplayerBar();
   if (roomData.status === 'ended') showGameOver();
 }
@@ -2551,12 +2558,17 @@ async function refreshPlayers() {
 async function pushPoemToRoom(poem) {
   if (!mpState.roomId) return;
   const sb = getSupabase();
-  const { data: room } = await sb.from('rooms').select('game_state').eq('id', mpState.roomId).single();
-  if (!room) return;
-  const poems = [...(room.game_state.poems || []), poem];
-  const nextId = getNextPlayerId();
+  const { data: rooms, error } = await sb.from('rooms').select('game_state,current_turn').eq('id', mpState.roomId);
+  if (error || !rooms || rooms.length === 0) return;
+  const room = rooms[0];
+  const poems = [...(room.game_state?.poems || []), poem];
+  // 使用数据库中的 current_turn 来计算下一个玩家
+  const currentTurnId = room.current_turn || mpState.currentTurnPlayerId;
+  const idx = mpState.players.findIndex(p => p.id === currentTurnId);
+  const nextIdx = idx === -1 ? 0 : (idx + 1) % mpState.players.length;
+  const nextId = mpState.players[nextIdx]?.id || mpState.playerId;
   await sb.from('rooms').update({
-    game_state: { ...room.game_state, poems, currentTurn: (room.game_state.currentTurn || 0) + 1 },
+    game_state: { ...room.game_state, poems, currentTurn: (room.game_state?.currentTurn || 0) + 1 },
     current_turn: nextId,
   }).eq('id', mpState.roomId);
 }
@@ -2565,7 +2577,15 @@ async function pushPoemToRoom(poem) {
 async function skipTurn() {
   if (!mpState.roomId) return;
   const sb = getSupabase();
-  await sb.from('rooms').update({ current_turn: getNextPlayerId() }).eq('id', mpState.roomId);
+  const { data: rooms, error } = await sb.from('rooms').select('current_turn').eq('id', mpState.roomId);
+  if (error || !rooms || rooms.length === 0) return;
+  const room = rooms[0];
+  // 使用数据库中的 current_turn 来计算下一个玩家
+  const currentTurnId = room.current_turn || mpState.currentTurnPlayerId;
+  const idx = mpState.players.findIndex(p => p.id === currentTurnId);
+  const nextIdx = idx === -1 ? 0 : (idx + 1) % mpState.players.length;
+  const nextId = mpState.players[nextIdx]?.id || mpState.playerId;
+  await sb.from('rooms').update({ current_turn: nextId }).eq('id', mpState.roomId);
 }
 
 // ---- 下一个玩家 ----
@@ -2573,6 +2593,7 @@ function getNextPlayerId() {
   const ps = mpState.players;
   if (ps.length < 2) return mpState.playerId;
   const idx = ps.findIndex(p => p.id === mpState.currentTurnPlayerId);
+  if (idx === -1) return ps[0]?.id || mpState.playerId;
   return ps[(idx + 1) % ps.length].id;
 }
 
