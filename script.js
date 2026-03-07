@@ -2424,8 +2424,10 @@ async function createRoom(nickname) {
 async function joinRoom(roomCode, nickname) {
   const sb = getSupabase();
   const roomId = roomCode.toUpperCase();
-  const { data: room, error } = await sb.from('rooms').select('*').eq('id', roomId).single();
-  if (error || !room) throw new Error('房间不存在');
+  const { data: rooms, error } = await sb.from('rooms').select('*').eq('id', roomId);
+  if (error) throw new Error('查询失败：' + error.message);
+  if (!rooms || rooms.length === 0) throw new Error('房间不存在');
+  const room = rooms[0];
   if (room.status === 'playing') throw new Error('游戏已经开始');
   if (room.status === 'ended') throw new Error('游戏已结束');
 
