@@ -305,7 +305,7 @@ const InputManager = {
   handleEvent(event) {
     switch (event.type) {
       case 'click':
-        handleCanvasClick(event.data);
+        handleCanvasClickOriginal(event.data);
         break;
       case 'move':
         handleMouseMove(event.data);
@@ -356,7 +356,7 @@ const InputManager = {
       clientY: data.clientY,
       target: gameCanvas
     };
-    handleCanvasClick(simulatedEvent);
+    handleCanvasClickOriginal(simulatedEvent);
   },
 
   handleTouchStart(data) {
@@ -1385,13 +1385,13 @@ function handleTouchEnd(e) {
 
   // 判定为点击：未触发拖拽、时间合理
   if (!touchHasMoved && duration < 500) {
-    handleCanvasClick({ clientX: t.clientX, clientY: t.clientY });
+    handleCanvasClickOriginal({ clientX: t.clientX, clientY: t.clientY });
   }
   touchHasMoved = false;
 }
 
-// 处理画布点击
-function handleCanvasClick(e) {
+// 处理画布点击（原始版本）
+function handleCanvasClickOriginal(e) {
   const rect = gameCanvas.getBoundingClientRect();
   const scaleX = 1;
   const scaleY = 1;
@@ -2808,11 +2808,79 @@ function updatePoemList() {
   });
 }
 
-// ---- 联机版 handleCanvasClick（非我回合拦截）----
-const _originalHandleCanvasClick = handleCanvasClick;
+// ---- 联机版 handleCanvasClick（非我回合禁止输入，允许选字）----
 function handleCanvasClick(e) {
-  if (mpState.enabled && !isMyTurn()) return;
-  _originalHandleCanvasClick(e);
+  // 单人模式或我回合：完全放行
+  if (!mpState.enabled || isMyTurn()) {
+    handleCanvasClickOriginal(e);
+    return;
+  }
+
+  // 联机模式且非我回合：只允许选字查看，禁止进入输入模式
+  const rect = gameCanvas.getBoundingClientRect();
+  const clickX = e.clientX - rect.left;
+  const clickY = e.clientY - rect.top;
+
+  if (gameState.draftMode) return;
+
+  const gridPos = pixelToGrid(clickX, clickY);
+  const key = `${gridPos.x},${gridPos.y}`;
+  const cell = gameState.cells.get(key);
+
+  // 阶段一：未选字时，允许选字
+  if (!gameState.selectedCell) {
+    if (cell) {
+      gameState.selectedCell = { x: gridPos.x, y: gridPos.y, char: cell.char };
+      drawCanvas();
+    }
+    return;
+  }
+
+  const sc = gameState.selectedCell;
+  const isOnSameRow = gridPos.y === sc.y;
+  const isOnSameCol = gridPos.x === sc.x;
+  const isSameCell = gridPos.x === sc.x && gridPos.y === sc.y;
+
+  // 再次点击同一个字：允许进入方向选择模式（只是改变状态，不输入）
+  if (isSameCell) {
+    gameState.directionPicker = { x: sc.x, y: sc.y };
+    drawCanvas();
+    return;
+  }
+
+  // 方向选择模式：检查是否尝试输入
+  if (gameState.directionPicker) {
+    const dp = gameState.directionPicker;
+    const isAdjacentH = gridPos.y === dp.y && Math.abs(gridPos.x - dp.x) === 1 && !cell;
+    const isAdjacentV = gridPos.x === dp.x && Math.abs(gridPos.y - dp.y) === 1 && !cell;
+
+    if (isAdjacentH || isAdjacentV) {
+      // 尝试进入输入模式 - 禁止（非我回合）
+      return;
+    }
+    // 只是退出方向选择，允许
+    gameState.directionPicker = null;
+    drawCanvas();
+    return;
+  }
+
+  // 阶段二：点击高亮行列上的空格子 - 禁止输入
+  if ((isOnSameRow || isOnSameCol) && !cell) {
+    // 非我回合，禁止进入输入模式
+    return;
+  }
+
+  // 其他操作：切换选字、取消选字 - 允许
+  if (cell) {
+    // 切换到另一个汉字
+    gameState.selectedCell = { x: gridPos.x, y: gridPos.y, char: cell.char };
+    drawCanvas();
+  } else {
+    // 点击空白处取消选中
+    gameState.selectedCell = null;
+    gameState.highlightedCells = [];
+    drawCanvas();
+  }
 }
 
 // ---- 游戏结束提示 ----
