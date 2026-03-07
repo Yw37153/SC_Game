@@ -2094,30 +2094,23 @@ function resetView() {
 
 // 显示开始界面
 function showStartOverlay() {
-  const overlay = document.getElementById('start-game-overlay');
-  const inputOverlay = document.getElementById('input-origin-overlay');
-  const gameContainer = document.getElementById('game-container');
-  
-  if (overlay) overlay.classList.remove('hidden');
-  if (inputOverlay) inputOverlay.classList.add('hidden');
-  if (gameContainer) gameContainer.classList.add('hidden');
+  document.getElementById('start-game-overlay')?.classList.remove('hidden');
+  document.getElementById('input-origin-overlay')?.classList.add('hidden');
+  document.getElementById('online-lobby-overlay')?.classList.add('hidden');
+  document.getElementById('join-room-overlay')?.classList.add('hidden');
+  document.getElementById('game-container')?.classList.add('hidden');
 }
 
 // 显示输入起始诗句界面
 function showInputOverlay() {
-  const overlay = document.getElementById('start-game-overlay');
+  document.getElementById('start-game-overlay')?.classList.add('hidden');
+  document.getElementById('online-lobby-overlay')?.classList.add('hidden');
   const inputOverlay = document.getElementById('input-origin-overlay');
-  
-  if (overlay) overlay.classList.add('hidden');
   if (inputOverlay) {
     inputOverlay.classList.remove('hidden');
-    // 聚焦到输入框
     setTimeout(() => {
       const input = document.getElementById('initial-poem-input');
-      if (input) {
-        input.value = '';
-        input.focus();
-      }
+      if (input) { input.value = ''; input.focus(); }
     }, 100);
   }
   hideInitError();
@@ -2266,19 +2259,16 @@ function restoreFromSave(data) {
 // 初始化游戏
 // 页面加载完成后设置事件监听
 window.addEventListener('DOMContentLoaded', () => {
-  // 开始界面 - 点击任意处继续
-  const startOverlay = document.getElementById('start-game-overlay');
-  if (startOverlay) {
-    startOverlay.addEventListener('click', () => {
-      showInputOverlay();
-    });
-  }
+  // 欢迎界面两个入口按钮
+  document.getElementById('solo-mode-btn')?.addEventListener('click', showInputOverlay);
+  document.getElementById('online-mode-btn')?.addEventListener('click', showOnlineLobby);
   
-  // 返回按钮
+  // 返回按钮（单人流程）
   const backBtn = document.getElementById('back-btn');
   if (backBtn) {
     backBtn.addEventListener('click', () => {
-      backToStartOverlay();
+      document.getElementById('input-origin-overlay')?.classList.add('hidden');
+      showStartOverlay();
     });
   }
   
@@ -2333,7 +2323,590 @@ window.addEventListener('DOMContentLoaded', () => {
   initializePanelCollapse();
 });
 
-// 面板折叠状态管理
+// ============================================================
+//  联机模块
+// ============================================================
+
+// ---- Supabase 配置 ----
+// 请将下方替换为你重新生成后的 anon key
+const SUPABASE_URL = 'https://ueakewogxnsyfiuugysx.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_sD1VgqV1O7FrlGimxlQfqQ_j2fuUTzj';
+let _supabase = null;
+function getSupabase() {
+  if (!_supabase && window.supabase) {
+    _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  }
+  return _supabase;
+}
+
+// ---- 联机状态 ----
+const mpState = {
+  enabled: false,
+  roomId: null,
+  playerId: null,
+  nickname: null,
+  color: '#436C85',
+  isHost: false,
+  players: [],
+  currentTurnPlayerId: null,
+  subscription: null,
+};
+
+// ---- 工具函数 ----
+function genRoomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+
+function genPlayerId() {
+  return 'p_' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36);
+}
+
+// ---- 联机入口显示 ----
+function showOnlineLobby() {
+  document.getElementById('start-game-overlay')?.classList.add('hidden');
+  document.getElementById('join-room-overlay')?.classList.add('hidden');
+  document.getElementById('online-lobby-overlay')?.classList.remove('hidden');
+  document.getElementById('lobby-create-section')?.classList.remove('hidden');
+  document.getElementById('lobby-waiting-section')?.classList.add('hidden');
+  document.getElementById('lobby-error')?.classList.add('hidden');
+}
+
+function showJoinRoom() {
+  document.getElementById('online-lobby-overlay')?.classList.add('hidden');
+  document.getElementById('join-room-overlay')?.classList.remove('hidden');
+  document.getElementById('join-error')?.classList.add('hidden');
+}
+
+// ---- 创建房间 ----
+async function createRoom(nickname) {
+  const sb = getSupabase();
+  const roomId = genRoomCode();
+  const playerId = genPlayerId();
+
+  const { error: rErr } = await sb.from('rooms').insert({
+    id: roomId,
+    game_state: { poems: [], currentTurn: 0, status: 'waiting' },
+    current_turn: playerId,
+    status: 'waiting',
+  });
+  if (rErr) throw rErr;
+
+  const { error: pErr } = await sb.from('players').insert({
+    id: playerId,
+    room_id: roomId,
+    nickname,
+    color: mpState.color,
+  });
+  if (pErr) throw pErr;
+
+  mpState.roomId = roomId;
+  mpState.playerId = playerId;
+  mpState.nickname = nickname;
+  mpState.isHost = true;
+  return roomId;
+}
+
+// ---- 加入房间 ----
+async function joinRoom(roomCode, nickname) {
+  const sb = getSupabase();
+  const roomId = roomCode.toUpperCase();
+  const { data: room, error } = await sb.from('rooms').select('*').eq('id', roomId).single();
+  if (error || !room) throw new Error('房间不存在');
+  if (room.status === 'playing') throw new Error('游戏已经开始');
+  if (room.status === 'ended') throw new Error('游戏已结束');
+
+  const { data: existing } = await sb.from('players').select('id').eq('room_id', roomId);
+  if (existing && existing.length >= 2) throw new Error('房间已满');
+
+  const playerId = genPlayerId();
+  const { error: pErr } = await sb.from('players').insert({
+    id: playerId, room_id: roomId, nickname, color: mpState.color,
+  });
+  if (pErr) throw pErr;
+
+  mpState.roomId = roomId;
+  mpState.playerId = playerId;
+  mpState.nickname = nickname;
+  mpState.isHost = false;
+  return room;
+}
+
+// ---- 订阅房间变化 ----
+function subscribeToRoom(roomId) {
+  const sb = getSupabase();
+  if (mpState.subscription) mpState.subscription.unsubscribe();
+  mpState.subscription = sb.channel('room:' + roomId)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` },
+      (payload) => handleRoomUpdate(payload.new))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'players', filter: `room_id=eq.${roomId}` },
+      () => refreshPlayers())
+    .subscribe();
+}
+
+// ---- 处理房间数据更新 ----
+function handleRoomUpdate(roomData) {
+  if (!roomData) return;
+  const gs = roomData.game_state;
+  if (gs && gs.poems && gs.poems.length !== gameState.poems.length) {
+    rebuildStateFromPoems(gs.poems);
+    updateUI();
+    drawCanvas();
+  }
+  mpState.currentTurnPlayerId = roomData.current_turn;
+  updateMultiplayerBar();
+  if (roomData.status === 'ended') showGameOver();
+}
+
+// ---- 刷新玩家列表 ----
+async function refreshPlayers() {
+  if (!mpState.roomId) return;
+  const sb = getSupabase();
+  const { data } = await sb.from('players').select('*').eq('room_id', mpState.roomId).order('joined_at');
+  if (data) {
+    mpState.players = data.map((p, i) => ({ ...p, isHost: i === 0 }));
+    updateLobbyPlayersList();
+    updateMultiplayerBar();
+    const startBtn = document.getElementById('start-online-game-btn');
+    if (startBtn) startBtn.disabled = data.length < 2;
+  }
+}
+
+// ---- 推送诗句到 Supabase ----
+async function pushPoemToRoom(poem) {
+  if (!mpState.roomId) return;
+  const sb = getSupabase();
+  const { data: room } = await sb.from('rooms').select('game_state').eq('id', mpState.roomId).single();
+  if (!room) return;
+  const poems = [...(room.game_state.poems || []), poem];
+  const nextId = getNextPlayerId();
+  await sb.from('rooms').update({
+    game_state: { ...room.game_state, poems, currentTurn: (room.game_state.currentTurn || 0) + 1 },
+    current_turn: nextId,
+  }).eq('id', mpState.roomId);
+}
+
+// ---- 跳过 ----
+async function skipTurn() {
+  if (!mpState.roomId) return;
+  const sb = getSupabase();
+  await sb.from('rooms').update({ current_turn: getNextPlayerId() }).eq('id', mpState.roomId);
+}
+
+// ---- 下一个玩家 ----
+function getNextPlayerId() {
+  const ps = mpState.players;
+  if (ps.length < 2) return mpState.playerId;
+  const idx = ps.findIndex(p => p.id === mpState.currentTurnPlayerId);
+  return ps[(idx + 1) % ps.length].id;
+}
+
+function isMyTurn() {
+  return !mpState.enabled || mpState.currentTurnPlayerId === mpState.playerId;
+}
+
+// ---- 从诗句数组重建状态 ----
+function rebuildStateFromPoems(poems) {
+  gameState.poems = poems;
+  gameState.cells = new Map();
+  gameState.poemSet = new Set();
+  poems.forEach((poem, poemIndex) => {
+    gameState.poemSet.add(poem.text);
+    for (let i = 0; i < poem.text.length; i++) {
+      const x = poem.x + (poem.direction === 'H' ? i : 0);
+      const y = poem.y + (poem.direction === 'V' ? i : 0);
+      const key = `${x},${y}`;
+      if (!gameState.cells.has(key)) gameState.cells.set(key, { char: poem.text[i], poemIndex, charIndex: i });
+    }
+  });
+}
+
+// ---- 颜色 ----
+function setMyColor(color) {
+  mpState.color = color;
+  document.querySelectorAll('.color-swatch').forEach(btn => {
+    btn.classList.toggle('selected', btn.dataset.color === color);
+  });
+  if (mpState.playerId) {
+    getSupabase()?.from('players').update({ color }).eq('id', mpState.playerId);
+  }
+}
+
+function getPoemColor(poemIndex) {
+  const poem = gameState.poems[poemIndex];
+  if (mpState.enabled && poem?.color) return poem.color;
+  return '#333';
+}
+
+// ---- 更新联机底部栏 ----
+function updateMultiplayerBar() {
+  if (!mpState.enabled) return;
+  const listEl = document.getElementById('mp-players-list');
+  const turnEl = document.getElementById('mp-turn-info');
+  if (!listEl || !turnEl) return;
+
+  listEl.innerHTML = '';
+  mpState.players.forEach(p => {
+    const tag = document.createElement('div');
+    tag.className = 'mp-player-tag' + (p.id === mpState.currentTurnPlayerId ? ' is-turn' : '');
+    tag.style.borderColor = p.id === mpState.currentTurnPlayerId ? p.color : 'transparent';
+    tag.style.color = p.color;
+    tag.innerHTML = `<span class="player-dot" style="background:${p.color}"></span>${p.nickname}`;
+    listEl.appendChild(tag);
+  });
+
+  const cur = mpState.players.find(p => p.id === mpState.currentTurnPlayerId);
+  if (cur) {
+    const isMe = cur.id === mpState.playerId;
+    turnEl.textContent = isMe ? '轮到你了' : `${cur.nickname} 正在输入...`;
+    turnEl.style.color = isMe ? cur.color : '#aaa';
+  }
+
+  document.getElementById('mp-skip-btn').disabled = !isMyTurn();
+  if (statusLabel) {
+    statusLabel.textContent = isMyTurn() ? '轮到你了，点击已有字开始接龙' : '等待对方输入...';
+  }
+}
+
+// ---- 更新大厅玩家列表 ----
+function updateLobbyPlayersList() {
+  const el = document.getElementById('lobby-players-list');
+  if (!el) return;
+  el.innerHTML = '';
+  mpState.players.forEach((p, i) => {
+    const item = document.createElement('div');
+    item.className = 'lobby-player-item';
+    item.innerHTML = `
+      <span class="lobby-player-dot" style="background:${p.color}"></span>
+      <span>${p.nickname}</span>
+      ${i === 0 ? '<span class="lobby-player-host">房主</span>' : ''}
+    `;
+    el.appendChild(item);
+  });
+}
+
+// ---- 房主开始游戏 ----
+async function startOnlineGame(poemText) {
+  const sb = getSupabase();
+  const poem = { text: poemText, x: 0, y: 0, direction: 'H', playerId: mpState.playerId, color: mpState.color };
+  await sb.from('rooms').update({
+    status: 'playing',
+    game_state: { poems: [poem], currentTurn: 1, status: 'playing' },
+    current_turn: mpState.playerId,
+  }).eq('id', mpState.roomId);
+  mpState.currentTurnPlayerId = mpState.playerId;
+}
+
+// ---- 离开房间 ----
+async function leaveRoom() {
+  mpState.subscription?.unsubscribe();
+  mpState.subscription = null;
+  if (mpState.roomId && mpState.playerId) {
+    await getSupabase()?.from('players').delete().eq('id', mpState.playerId);
+  }
+  Object.assign(mpState, { enabled: false, roomId: null, playerId: null, players: [], isHost: false });
+}
+
+// ---- 联机版 confirmDraft（在原版基础上追加推送）----
+// 覆盖原 confirmDraft
+const _originalConfirmDraft = confirmDraft;
+// 重新定义 confirmDraft，让联机模式追加颜色信息并推送
+function confirmDraft() {
+  if (confirmBtn.disabled || !gameState.draft) return;
+  const draft = gameState.draft;
+  let lastEdited = -1;
+  for (let i = draft.inputCells.length - 1; i >= 0; i--) {
+    if (draft.inputCells[i].userEdited) { lastEdited = i; break; }
+  }
+  if (lastEdited < 0) return;
+
+  const usedCells = draft.inputCells.slice(0, lastEdited + 1);
+  const text = usedCells.map(c => c.char).join('');
+
+  const newPoem = {
+    text,
+    x: usedCells[0].x,
+    y: usedCells[0].y,
+    direction: draft.direction,
+    turn: gameState.currentTurn + 1,
+  };
+
+  if (mpState.enabled) {
+    newPoem.playerId = mpState.playerId;
+    newPoem.color = mpState.color;
+  }
+
+  gameState.poems.push(newPoem);
+  const newKeys = [];
+  for (let i = 0; i < usedCells.length; i++) {
+    const cell = usedCells[i];
+    const key = `${cell.x},${cell.y}`;
+    if (!gameState.cells.has(key)) {
+      gameState.cells.set(key, { char: cell.char, poemIndex: gameState.poems.length - 1, charIndex: i });
+      newKeys.push(key);
+    }
+  }
+  gameState.history.push(newKeys);
+  gameState.redoStack = [];
+  gameState.poemSet.add(text);
+  gameState.currentTurn++;
+
+  if (mpState.enabled) pushPoemToRoom(newPoem);
+
+  updateUI();
+  exitDraftMode();
+}
+
+// ---- 联机版 drawPoems（支持颜色）----
+// 覆盖原 drawPoems
+function drawPoems(ctx) {
+  const centerX = vw() / 2 + gameState.canvas.offsetX;
+  const centerY = vh() / 2 + gameState.canvas.offsetY;
+  const scale = gameState.canvas.scale;
+
+  gameState.poems.forEach((poem, poemIdx) => {
+    const color = getPoemColor(poemIdx);
+    for (let i = 0; i < poem.text.length; i++) {
+      const x = poem.x + (poem.direction === "H" ? i : 0);
+      const y = poem.y + (poem.direction === "V" ? i : 0);
+      const pixelX = centerX + x * CELL_SIZE * scale;
+      const pixelY = centerY + y * CELL_SIZE * scale;
+
+      const isSource = gameState.selectedSource &&
+                       gameState.selectedSource.x === x &&
+                       gameState.selectedSource.y === y;
+
+      if (isSource) {
+        const sourceSize = CELL_SIZE * scale * 1.3;
+        const offset = (sourceSize - CELL_SIZE * scale) / 2;
+        ctx.fillStyle = 'rgba(100,149,237,0.15)';
+        ctx.fillRect(pixelX - offset, pixelY - offset, sourceSize, sourceSize);
+        ctx.strokeStyle = '#4169E1';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(pixelX - offset, pixelY - offset, sourceSize, sourceSize);
+        ctx.fillStyle = color;
+        ctx.font = `${32 * scale}px "Noto Serif SC","SimSun",serif`;
+      } else {
+        ctx.fillStyle = 'white';
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.fillRect(pixelX, pixelY, CELL_SIZE * scale, CELL_SIZE * scale);
+        ctx.strokeRect(pixelX, pixelY, CELL_SIZE * scale, CELL_SIZE * scale);
+        ctx.fillStyle = color;
+        ctx.font = `${24 * scale}px "Noto Serif SC","SimSun",serif`;
+      }
+
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(poem.text[i], pixelX + CELL_SIZE * scale / 2, pixelY + CELL_SIZE * scale / 2);
+    }
+  });
+}
+
+// ---- 联机版 updatePoemList（带颜色点） ----
+function updatePoemList() {
+  const list = document.getElementById('poem-list');
+  if (!list) return;
+  list.innerHTML = '';
+  gameState.poems.forEach((poem, i) => {
+    const color = getPoemColor(i);
+    const item = document.createElement('div');
+    item.style.cssText = `
+      padding:5px 8px;margin-bottom:4px;border-radius:4px;
+      font-size:14px;font-family:"Noto Serif SC","SimSun",serif;
+      background:${i === 0 ? '#f8f8f8' : '#fff'};
+      border:1px solid #eee;display:flex;align-items:center;gap:6px;
+    `;
+    const num = document.createElement('span');
+    num.textContent = i + 1;
+    num.style.cssText = 'color:#ccc;font-size:11px;min-width:16px;text-align:right;flex-shrink:0;';
+    const dot = document.createElement('span');
+    dot.style.cssText = `width:7px;height:7px;border-radius:50%;background:${color};flex-shrink:0;`;
+    const text = document.createElement('span');
+    text.textContent = poem.text;
+    text.style.color = color;
+    item.appendChild(num);
+    if (mpState.enabled) item.appendChild(dot);
+    item.appendChild(text);
+    list.appendChild(item);
+  });
+}
+
+// ---- 联机版 handleCanvasClick（非我回合拦截）----
+const _originalHandleCanvasClick = handleCanvasClick;
+function handleCanvasClick(e) {
+  if (mpState.enabled && !isMyTurn()) return;
+  _originalHandleCanvasClick(e);
+}
+
+// ---- 游戏结束提示 ----
+function showGameOver() {
+  const overlay = document.getElementById('game-over-overlay');
+  document.getElementById('game-over-turn').textContent = gameState.currentTurn;
+  document.getElementById('game-over-poem-count').textContent = gameState.poems.length;
+  overlay?.classList.remove('hidden');
+}
+
+// ---- DOMContentLoaded：绑定联机相关按钮 ----
+document.addEventListener('DOMContentLoaded', () => {
+
+  // 默认选中第一个颜色
+  setMyColor(mpState.color);
+
+  // 颜色选择器
+  document.querySelectorAll('.color-swatch').forEach(btn => {
+    btn.addEventListener('click', () => setMyColor(btn.dataset.color));
+  });
+
+  // 联机大厅：返回
+  document.getElementById('lobby-back-btn')?.addEventListener('click', () => {
+    document.getElementById('online-lobby-overlay')?.classList.add('hidden');
+    showStartOverlay();
+  });
+
+  // 有房间码入口
+  document.getElementById('show-join-btn')?.addEventListener('click', showJoinRoom);
+
+  // 创建房间
+  document.getElementById('create-room-btn')?.addEventListener('click', async () => {
+    const nickname = document.getElementById('nickname-input')?.value.trim();
+    const errEl = document.getElementById('lobby-error');
+    if (!nickname) { if (errEl) { errEl.textContent = '请输入昵称'; errEl.classList.remove('hidden'); } return; }
+    errEl?.classList.add('hidden');
+    try {
+      const roomId = await createRoom(nickname);
+      document.getElementById('room-code-display').textContent = roomId;
+      document.getElementById('lobby-create-section')?.classList.add('hidden');
+      document.getElementById('lobby-waiting-section')?.classList.remove('hidden');
+      subscribeToRoom(roomId);
+      await refreshPlayers();
+    } catch (err) {
+      if (errEl) { errEl.textContent = '创建失败：' + err.message; errEl.classList.remove('hidden'); }
+    }
+  });
+
+  // 复制房间码
+  document.getElementById('copy-room-code-btn')?.addEventListener('click', () => {
+    const code = document.getElementById('room-code-display')?.textContent;
+    if (!code) return;
+    navigator.clipboard.writeText(code).then(() => {
+      const btn = document.getElementById('copy-room-code-btn');
+      if (btn) { btn.textContent = '已复制！'; setTimeout(() => btn.textContent = '复制', 1500); }
+    });
+  });
+
+  // 离开房间
+  document.getElementById('leave-room-btn')?.addEventListener('click', async () => {
+    await leaveRoom(); showStartOverlay();
+  });
+
+  // 房主开始游戏
+  document.getElementById('start-online-game-btn')?.addEventListener('click', () => {
+    document.getElementById('online-lobby-overlay')?.classList.add('hidden');
+    // 显示起始诗句输入
+    const inputOverlay = document.getElementById('input-origin-overlay');
+    inputOverlay?.classList.remove('hidden');
+    // 改写确认按钮行为为联机版
+    const beginBtn = document.getElementById('begin-game-btn');
+    const newBeginBtn = beginBtn.cloneNode(true);
+    beginBtn.parentNode.replaceChild(newBeginBtn, beginBtn);
+    newBeginBtn.addEventListener('click', async () => {
+      const poemText = document.getElementById('initial-poem-input')?.value.trim();
+      if (!poemText || poemText.length < 2) { showInitError('请输入起始诗句（至少2字）'); return; }
+      INITIAL_POEM.text = poemText;
+      mpState.enabled = true;
+      inputOverlay?.classList.add('hidden');
+      document.getElementById('game-container')?.classList.remove('hidden');
+      document.getElementById('multiplayer-bar')?.classList.remove('hidden');
+      await startOnlineGame(poemText);
+      initGame();
+      updateMultiplayerBar();
+    });
+    // Enter 键也绑一下
+    document.getElementById('initial-poem-input')?.addEventListener('keydown', function onEnter(e) {
+      if (e.key === 'Enter') { newBeginBtn.click(); this.removeEventListener('keydown', onEnter); }
+    });
+  });
+
+  // 加入房间
+  document.getElementById('join-back-btn')?.addEventListener('click', () => {
+    document.getElementById('join-room-overlay')?.classList.add('hidden');
+    showOnlineLobby();
+  });
+
+  document.getElementById('join-room-btn')?.addEventListener('click', async () => {
+    const nickname = document.getElementById('join-nickname-input')?.value.trim();
+    const code = document.getElementById('join-room-code-input')?.value.trim();
+    const errEl = document.getElementById('join-error');
+    if (!nickname) { if (errEl) { errEl.textContent = '请输入昵称'; errEl.classList.remove('hidden'); } return; }
+    if (!code || code.length !== 6) { if (errEl) { errEl.textContent = '请输入6位房间码'; errEl.classList.remove('hidden'); } return; }
+    errEl?.classList.add('hidden');
+    try {
+      const room = await joinRoom(code, nickname);
+      mpState.enabled = true;
+      subscribeToRoom(mpState.roomId);
+      await refreshPlayers();
+
+      if (room.status === 'playing') {
+        // 游戏已开始，直接进入
+        document.getElementById('join-room-overlay')?.classList.add('hidden');
+        document.getElementById('game-container')?.classList.remove('hidden');
+        document.getElementById('multiplayer-bar')?.classList.remove('hidden');
+        rebuildStateFromPoems(room.game_state.poems || []);
+        mpState.currentTurnPlayerId = room.current_turn;
+        initCanvas();
+        setupEventListeners();
+        updateUI();
+        drawCanvas();
+        updateMultiplayerBar();
+      } else {
+        // 等待房主开始
+        document.getElementById('join-room-overlay')?.classList.add('hidden');
+        document.getElementById('online-lobby-overlay')?.classList.remove('hidden');
+        document.getElementById('lobby-create-section')?.classList.add('hidden');
+        document.getElementById('lobby-waiting-section')?.classList.remove('hidden');
+        document.getElementById('room-code-display').textContent = code.toUpperCase();
+        document.getElementById('start-online-game-btn').style.display = 'none';
+        updateLobbyPlayersList();
+        // 等待 handleRoomUpdate 推入游戏
+        const origHandle = handleRoomUpdate;
+        // 一次性监听游戏开始
+        const _unsub = getSupabase().channel('room-start:' + mpState.roomId)
+          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${mpState.roomId}` },
+            (payload) => {
+              if (payload.new.status === 'playing') {
+                document.getElementById('online-lobby-overlay')?.classList.add('hidden');
+                document.getElementById('game-container')?.classList.remove('hidden');
+                document.getElementById('multiplayer-bar')?.classList.remove('hidden');
+                handleRoomUpdate(payload.new);
+                initCanvas();
+                setupEventListeners();
+                updateMultiplayerBar();
+                _unsub.unsubscribe();
+              }
+            }).subscribe();
+      }
+    } catch (err) {
+      if (errEl) { errEl.textContent = err.message; errEl.classList.remove('hidden'); }
+    }
+  });
+
+  // 跳过按钮
+  document.getElementById('mp-skip-btn')?.addEventListener('click', async () => {
+    if (!isMyTurn()) return;
+    await skipTurn();
+    updateMultiplayerBar();
+  });
+
+  // 结算界面：新游戏
+  document.getElementById('game-over-new-btn')?.addEventListener('click', async () => {
+    document.getElementById('game-over-overlay')?.classList.add('hidden');
+    await leaveRoom();
+    showStartOverlay();
+  });
+});
 function initializePanelCollapse() {
   // 恢复面板状态
   restorePanelStates();
