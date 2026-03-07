@@ -2330,7 +2330,7 @@ window.addEventListener('DOMContentLoaded', () => {
 // ---- Supabase 配置 ----
 // 请将下方替换为你重新生成后的 anon key
 const SUPABASE_URL = 'https://ueakewogxnsyfiuugysx.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_sD1VgqV1O7FrlGimxlQfqQ_j2fuUTzj';
+const SUPABASE_KEY = '在此填入你的新anon_key';
 let _supabase = null;
 function getSupabase() {
   if (!_supabase && window.supabase) {
@@ -2438,12 +2438,48 @@ async function joinRoom(roomCode, nickname) {
 function subscribeToRoom(roomId) {
   const sb = getSupabase();
   if (mpState.subscription) mpState.subscription.unsubscribe();
+  if (mpState._pollInterval) clearInterval(mpState._pollInterval);
+
+  // players 表的 INSERT 在有 filter 时可能不触发（需要 replica identity full）
+  // 改为监听不带 filter 的所有 players 变化，在回调里自行过滤
   mpState.subscription = sb.channel('room:' + roomId)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` },
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` },
       (payload) => handleRoomUpdate(payload.new))
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'players', filter: `room_id=eq.${roomId}` },
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'players' },
+      () => refreshPlayers())
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'players' },
+      () => refreshPlayers())
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'players' },
       () => refreshPlayers())
     .subscribe();
+
+  // 兜底轮询：每 3 秒主动拉取玩家列表和房间状态
+  // 防止 Realtime 因配置或网络原因未触发
+  mpState._pollInterval = setInterval(async () => {
+    await refreshPlayers();
+    if (!mpState.roomId) return;
+    const { data: room } = await sb.from('rooms').select('*').eq('id', mpState.roomId).single();
+    if (!room) return;
+    // 如果游戏已开始但玩家还卡在大厅，主动推入游戏
+    const lobbyEl = document.getElementById('online-lobby-overlay');
+    if (room.status === 'playing' && lobbyEl && !lobbyEl.classList.contains('hidden')) {
+      lobbyEl.classList.add('hidden');
+      document.getElementById('game-container')?.classList.remove('hidden');
+      document.getElementById('multiplayer-bar')?.classList.remove('hidden');
+      handleRoomUpdate(room);
+      if (gameCanvas.width === 0) initCanvas();
+      setupEventListeners();
+      updateMultiplayerBar();
+      stopLobbyPoll();
+    }
+  }, 3000);
+}
+
+function stopLobbyPoll() {
+  if (mpState._pollInterval) {
+    clearInterval(mpState._pollInterval);
+    mpState._pollInterval = null;
+  }
 }
 
 // ---- 处理房间数据更新 ----
@@ -2601,6 +2637,7 @@ async function startOnlineGame(poemText) {
 
 // ---- 离开房间 ----
 async function leaveRoom() {
+  stopLobbyPoll();
   mpState.subscription?.unsubscribe();
   mpState.subscription = null;
   if (mpState.roomId && mpState.playerId) {
