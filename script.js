@@ -2330,7 +2330,7 @@ window.addEventListener('DOMContentLoaded', () => {
 // ---- Supabase 配置 ----
 // 请将下方替换为你重新生成后的 anon key
 const SUPABASE_URL = 'https://ueakewogxnsyfiuugysx.supabase.co';
-const SUPABASE_KEY = '在此填入你的新anon_key';
+const SUPABASE_KEY = 'sb_publishable_sD1VgqV1O7FrlGimxlQfqQ_j2fuUTzj';
 let _supabase = null;
 function getSupabase() {
   if (!_supabase && window.supabase) {
