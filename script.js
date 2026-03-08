@@ -2319,6 +2319,18 @@ window.addEventListener('DOMContentLoaded', () => {
     e.target.value = ''; // 允许重复导入同一文件
   });
 
+  // 结束游戏按钮
+  document.getElementById('end-game-btn')?.addEventListener('click', async () => {
+    if (!confirm('确定要结束游戏吗？')) return;
+
+    // 联机模式：通知其他玩家游戏结束
+    if (mpState.enabled && mpState.isHost) {
+      await endOnlineGame();
+    }
+
+    showGameOver();
+  });
+
   // 草稿栏按钮事件
   if (cancelBtn) {
     cancelBtn.addEventListener('click', exitDraftMode);
@@ -2537,7 +2549,33 @@ function handleRoomUpdate(roomData) {
     mpState.currentTurnPlayerId = roomData.current_turn;
   }
   updateMultiplayerBar();
-  if (roomData.status === 'ended') showGameOver();
+
+  // 游戏结束
+  if (roomData.status === 'ended') {
+    showGameOver();
+  }
+
+  // 房主重新开始游戏（从 ended 变为 waiting）
+  if (roomData.status === 'waiting' && gameState.poems?.length > 0) {
+    // 关闭游戏结束弹窗
+    document.getElementById('game-over-overlay')?.classList.add('hidden');
+    // 清空本地状态
+    gameState.poems = [];
+    gameState.cells = new Map();
+    gameState.poemSet = new Set();
+    gameState.currentTurn = 1;
+    gameState.history = [];
+    gameState.redoStack = [];
+    // 非房主显示等待提示
+    if (!mpState.isHost) {
+      document.getElementById('online-lobby-overlay')?.classList.remove('hidden');
+      document.getElementById('lobby-create-section')?.classList.add('hidden');
+      document.getElementById('lobby-waiting-section')?.classList.remove('hidden');
+      document.getElementById('start-online-game-btn').style.display = 'none';
+      document.getElementById('lobby-wait-hint')?.classList.remove('hidden');
+      document.getElementById('lobby-wait-hint-host')?.classList.add('hidden');
+    }
+  }
 }
 
 // ---- 刷新玩家列表 ----
@@ -2691,6 +2729,13 @@ async function startOnlineGame(poemText) {
     current_turn: mpState.playerId,
   }).eq('id', mpState.roomId);
   mpState.currentTurnPlayerId = mpState.playerId;
+}
+
+// ---- 结束游戏（联机）----
+async function endOnlineGame() {
+  if (!mpState.roomId) return;
+  const sb = getSupabase();
+  await sb.from('rooms').update({ status: 'ended' }).eq('id', mpState.roomId);
 }
 
 // ---- 离开房间 ----
@@ -2907,8 +2952,33 @@ function handleCanvasClick(e) {
 // ---- 游戏结束提示 ----
 function showGameOver() {
   const overlay = document.getElementById('game-over-overlay');
+  const titleEl = overlay?.querySelector('h2');
+  const hintEl = overlay?.querySelector('.input-hint');
+
+  // 更新标题和提示
+  if (mpState.enabled) {
+    if (titleEl) titleEl.textContent = '对局结束';
+    if (hintEl) hintEl.textContent = mpState.isHost ? '你是房主，可以点击"再开一把"重新开始' : '等待房主重新开始游戏';
+  } else {
+    if (titleEl) titleEl.textContent = '游戏结算';
+    if (hintEl) hintEl.textContent = '本局游戏已结束';
+  }
+
+  // 更新统计数据
   document.getElementById('game-over-turn').textContent = gameState.currentTurn;
   document.getElementById('game-over-poem-count').textContent = gameState.poems.length;
+
+  // 更新按钮文字
+  const newBtn = document.getElementById('game-over-new-btn');
+  if (newBtn) {
+    if (mpState.enabled) {
+      newBtn.textContent = mpState.isHost ? '再开一把' : '退出房间';
+    } else {
+      newBtn.textContent = '再开一把';
+    }
+  }
+
+  // 显示弹窗
   overlay?.classList.remove('hidden');
 }
 
@@ -3043,11 +3113,44 @@ document.addEventListener('DOMContentLoaded', () => {
     updateMultiplayerBar();
   });
 
-  // 结算界面：新游戏
+  // 结算界面：保存存档
+  document.getElementById('game-over-save-btn')?.addEventListener('click', () => {
+    exportGame();
+  });
+
+  // 结算界面：再开一把
   document.getElementById('game-over-new-btn')?.addEventListener('click', async () => {
     document.getElementById('game-over-overlay')?.classList.add('hidden');
-    await leaveRoom();
-    showStartOverlay();
+
+    if (mpState.enabled) {
+      // 联机模式：房主可以重新开始，其他人退出房间
+      if (mpState.isHost) {
+        // 重置房间状态为等待中
+        const sb = getSupabase();
+        await sb.from('rooms').update({
+          status: 'waiting',
+          game_state: { poems: [], currentTurn: 0, status: 'waiting' },
+          current_turn: mpState.playerId
+        }).eq('id', mpState.roomId);
+        // 清空本地诗句
+        gameState.poems = [];
+        gameState.cells = new Map();
+        gameState.poemSet = new Set();
+        gameState.currentTurn = 1;
+        gameState.history = [];
+        gameState.redoStack = [];
+        // 显示起始诗句输入界面
+        document.getElementById('input-origin-overlay')?.classList.remove('hidden');
+      } else {
+        // 非房主退出房间
+        await leaveRoom();
+        showStartOverlay();
+      }
+    } else {
+      // 单人模式：直接重新开始
+      resetGame();
+      document.getElementById('start-game-overlay')?.classList.remove('hidden');
+    }
   });
 });
 function initializePanelCollapse() {
